@@ -11,7 +11,7 @@ plumb to showmail
 type is text
 data matches 'https?://[^ ]+'
 plumb to web
-plumb client window $browser
+plumb client window $browser $0
 
 # rtf files go to wdoc2txt
 type is text
