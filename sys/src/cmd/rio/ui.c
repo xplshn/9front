@@ -3,31 +3,25 @@
 /* window obj n */
 /* n is repeat - derive from prefix */
 
-#include <u.h>
-#include <libc.h>
-#include <draw.h>
-#include <thread.h>
-#include <cursor.h>
-#include <mouse.h>
-#include <keyboard.h>
-#include <frame.h>
-#include <fcall.h>
-/* #include <plumb.h> */
-/* #include <complete.h> */
-#include "dat.h"
+/* #include <u.h> */
+/* #include <libc.h> */
+/* #include <draw.h> */
+/* #include <thread.h> */
+/* #include <cursor.h> */
+/* #include <mouse.h> */
+/* #include <keyboard.h> */
+/* #include <frame.h> */
+/* #include <fcall.h> */
+/* /\* #include <plumb.h> *\/ */
+/* /\* #include <complete.h> *\/ */
+/* #include "dat.h" */
 
-#define NULL ((void*)0)
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include "ui.h"
 
-int wbswidth(Window *w, Rune c);
-void wsetselect(Window *w, uint q0, uint q1);
-void wdelete(Window *w, uint q0, uint q1);
-uint winsert(Window *w, Rune *r, int n, uint q0);
-
-typedef int bool;
-typedef struct {
-  int q0, q1, qh, nr, org;
-  char *r;
-} Window1;
+/* #define NULL ((void*)0) */
 
 typedef struct {
   char *s;
@@ -92,7 +86,8 @@ void lineup(Window *w, int n) {
 }  
 
 void linedown(Window *w, int n) {
-  int q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*w->font->height));
+  int q0;
+  /* q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*w->font->height)); */
   wsetorigin(w, q0, TRUE);
 }
 
@@ -113,15 +108,18 @@ void charright(Window *w, int n) {
 }
 
 void cut(Window *w) {
+  printf("cut\n");
   wsnarf(w);
   wcut(w);
 }
 
 void copy(Window *w) {
+  printf("copy\n");
   wsnarf(w);
 }
 
 void paste(Window *w) {
+  printf("paste\n");
   wpaste(w);
 }
 
@@ -165,20 +163,23 @@ void wordf(Window *w, int i) {
 }
 
 void self_insert(Window *w, Rune s, int n) {
+  printf("insert %c\n", s);
 	uint q0 = w->q0;
 	q0 = winsert(w, &s, n, q0);
 	wshow(w, q0 + 1);
 }
 
 struct { const char *s; int argc; void (*f); } prim[] = {
-  {"bol", 1, bol}, {"eol", 1, eol}, {"bob", 1, bob}, {"eob", 1, eob},
-  {"forward-char", 2, charleft}
+  /* {"bol", 1, bol}, {"eol", 1, eol}, {"bob", 1, bob}, {"eob", 1, eob}, */
+  /* {"forward-char", 2, charleft}, */
+  {"cut", 1, cut}, {"copy", 1, copy}, {"paste", 1, paste},
 };
 
 void keymap_set_key(Keymap *map, char k, char *cmd) {
-  int n = map->n;
-  for (int i = 0; prim[i].s; ++i)
-	if (strcmp(prim[i].s, cmd)) {
+  int n = map->n, match = 0;
+  for (int i = 0; prim[i].s && !match; ++i) {
+	printf("%d %s\n", i, prim[i].s);
+	if (strcmp(prim[i].s, cmd) == 0) {
 	  Command *c = malloc(sizeof(Command));
 	  c->argc = prim[i].argc;
 	  switch(prim[i].argc) {
@@ -189,7 +190,9 @@ void keymap_set_key(Keymap *map, char k, char *cmd) {
 	  map->k[n] = k;
 	  map->val[n].cmd = c;
 	  map->n = ++n;
+	  match = 1;
 	}
+  }
 }
 
 void keymap_reset(void) {
@@ -203,7 +206,7 @@ void keymap_exec(Rune *seq) {
   Command *cmd = NULL;
   for (int i = 0; seq[i] && !cmd; ++i) {
 	if (cur_map) {
-	  for (int j = 0; j < cur_map->n; ++j) {
+	  for (int j = 0; j <= cur_map->n; ++j) {
 		if (map_mode == 0 && seq[i] >= '0' && seq[i] <= '9') {
 		  prefix = seq[i] - '0';
 		  break;
@@ -211,12 +214,12 @@ void keymap_exec(Rune *seq) {
 		  map_mode = 1;
 		  if (cur_map->iscmd) {
 			cmd = cur_map->val[j].cmd;
-			break;
 		  } else
 			cur_map = cur_map->val[j].map;
+		  break;
 		}
 	  }
-	} else if (seq[i] == Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
+	} else if (seq[i] == 24) {//Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
 	  cur_map = global_map;
 	} else {
 	  self_insert(win, seq[i], prefix ? prefix : 1);
@@ -243,15 +246,57 @@ Keydef keys[] = {
 };
 
 void keymap_load(Keydef keys[]) {
-  for(int i=0; keys[i].k; i++)
+  for(int i=0; keys[i].k; i++) {
+	cur_map = NULL;
 	for(int j=0; keys[i].k[j]; j++) {
 	  char k = keys[i].k[j];
-	  if (k == 'C')
-		k = Kctl;
-	  else if (k == 'M')
-		k = Kalt;
-	  else if (k == 'S')
-		k = Kshift;
-	  keymap_set_key(global_map, k, keys[i].cmd);
+	  if ((k == '-') || (k == ' '))
+		continue;
+
+	  if ((k == 'C') || (k == 'M') || (k == 'S')) {
+		int i;
+		if (k == 'C') {
+		  k = Kctl;
+		  i = 0;
+		} else if (k == 'M') {
+		  k = Kalt;
+		  i = 1;
+		} else if (k == 'S') {
+		  k = Kshift;
+		  i = 2;
+		}
+		if (cur_map == NULL && global_map->val[i].map) {
+		  cur_map = global_map->val[i].map;
+		} else {
+		  int n = 3;
+		  cur_map = malloc(sizeof(Keymap));
+		  cur_map->k   = malloc(n * sizeof(int));
+		  cur_map->val = malloc(n * sizeof(Keymap));
+		  global_map->k[i] = k;
+		  global_map->val[i].map = cur_map;
+		}
+	  } else
+		keymap_set_key(cur_map, k, keys[i].cmd);
 	}
+  }
+  cur_map = NULL;
+}
+
+void main(int argc, char *argv) {
+  int n = 3;
+  global_map = malloc(sizeof(Keymap));
+  global_map->k   = malloc(n * sizeof(int));
+  global_map->val = malloc(n * sizeof(Keymap));
+  keymap_load(keys);
+
+  char i = 1;
+  /* while (i) { */
+  /* 	/\* scanf("%s", &i); *\/ */
+  /* 	i = getchar(); */
+  /* 	keymap_exec(&i); */
+  /* } */
+  char s[] = {24, 'x', 0};
+  keymap_exec(s);
+  /* s[0] = 'x'; */
+  /* keymap_exec(s); */
 }
