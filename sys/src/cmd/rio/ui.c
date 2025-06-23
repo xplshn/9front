@@ -16,17 +16,22 @@ typedef struct {
 } Command;
 
 typedef struct {
-  char k;
+  char *k;
+  int n;
   boolean iscmd;
-  union val {
-	Keymap  map;
-	Command cmd;
-  }
+  union {
+	Keymap  *map;
+	Command *cmd;
+  } *val;
 } Keymap;
 
+typedef struct {
+  char *k, *cmd;
+} Keydef;
+
 Window *win;
-Keymap *global_map, cur_map;
-int prefix;
+Keymap *global_map, *cur_map;
+int prefix, map_mode;
 
 void bol(Window *w) {
   int nb;
@@ -136,9 +141,9 @@ void wordf(Window *w, int i) {
   w->q1 = p1;
 }
 
-void self_insert(Window *w, char *s) {
+void self_insert(Window *w, char s, int n) {
 	int q0 = w->q0;
-	q0 = winsert(w, s, 1, q0);
+	q0 = winsert(w, &s, n, q0);
 	wshow(w, q0 + 1);
 }
 
@@ -147,35 +152,52 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"forward-char", 2, charleft}
 };
 
-void load_keymap(Keymap map) {
+void keymap_set_key(Keymap *map, char k, char *cmd) {
+  int n = map->n;
   for (int i = 0; prim[i].s; ++i)
-	if (strcmp(prim[i].s, map.s)) {
-	  map.f = prim[i].f;
-	  map.argc = prim[i].argc;
+	if (strcmp(prim[i].s, cmd)) {
+	  Command *c = malloc(sizeof(Command));
+	  c->argc = prim[i].argc;
 	  switch(prim[i].argc) {
 	  case 1:
-		map.f1 = prim[i].f;
+		c->f1 = prim[i].f;
 		break;
 	  }
+	  map->k[n] = k;
+	  map->val[n].cmd = c;
+	  map->n = ++n;
 	}
 }
 
-void exec_keymap(char *seq) {
-  Command cmd = NULL;
-  if (cur_map == NULL && seq[0] == Kctl) {
-	cur_map = *global_map;
-	seq++;
-  }
-  for (int i = 0; seq[i]; ++i) {
+void keymap_reset() {
+  /* Reset after command execution */
+  cur_map = NULL;
+  prefix = 0;
+  map_mode = 0;
+}
+
+void keymap_exec(char *seq) {
+  Command *cmd = NULL;
+  for (int i = 0; seq[i] && !cmd; ++i) {
 	if (cur_map) {
-	if (seq[i] >= '0' && seq[i] <= '9')
-	  prefix = seq[i] - '0';
-	if (seq[i] == cur_map.k)
-	  if (map.iscmd) {
-		cmd = cur_map.cmd;
-		break;
-	  } else
-		cur_map = cur_map.map;
+	  for (int j = 0; j < cur_map->n; ++j) {
+		if (map_mode == 0 && seq[i] >= '0' && seq[i] <= '9') {
+		  prefix = seq[i] - '0';
+		  break;
+		} else if (seq[i] == cur_map->k[j]) {
+		  map_mode = 1;
+		  if (map.iscmd) {
+			cmd = cur_map->val[j].cmd;
+			break;
+		  } else
+			cur_map = cur_map->val[j].map;
+		}
+	  }
+	} else if (seq[i] == Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
+	  cur_map = *global_map;
+	} else {
+	  self_insert(win, seq[i], prefix ? prefix : 1);
+	  keymap_reset();
 	}
   }
   if (cmd != NULL) {
@@ -187,8 +209,26 @@ void exec_keymap(char *seq) {
 	  (*cmd.f2)(win, prefix ? prefix : 1);
   	  break;
 	}
-	prefix = 0;
+	keymap_reset();
   } else {
 	// No binding
   }
+}
+
+Keydef keys[] = {
+  {"C-x", "cut"}, {"C-y", "copy"}, {"C-v", "paste"}
+};
+
+void keymap_load(Keydef keys[]) {
+  for(int i=0; keys[i].k; i++)
+	for(int j=0; keys[i].k[j]; j++) {
+	  char k = keys[i].k[j];
+	  if (k == 'C')
+		k = Kctl;
+	  else if (k == 'M')
+		k = Kalt;
+	  else if (k == 'S')
+		k = Kshift;
+	  keymap_set_key(global_map, k, keys[i].cmd);
+	}
 }
