@@ -2,10 +2,32 @@
 /* del  char word line */
 /* window obj n */
 /* n is repeat - derive from prefix */
+
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
+#include <thread.h>
+#include <cursor.h>
+#include <mouse.h>
+#include <keyboard.h>
+#include <frame.h>
+#include <fcall.h>
+/* #include <plumb.h> */
+/* #include <complete.h> */
+#include "dat.h"
+
+#define NULL ((void*)0)
+
+int wbswidth(Window *w, Rune c);
+void wsetselect(Window *w, uint q0, uint q1);
+void wdelete(Window *w, uint q0, uint q1);
+uint winsert(Window *w, Rune *r, int n, uint q0);
+
+typedef int bool;
 typedef struct {
   int q0, q1, qh, nr, org;
   char *r;
-} Window;
+} Window1;
 
 typedef struct {
   char *s;
@@ -15,10 +37,11 @@ typedef struct {
   int argc;
 } Command;
 
-typedef struct {
+typedef struct keymap Keymap;
+typedef struct keymap {
   char *k;
   int n;
-  boolean iscmd;
+  bool iscmd;
   union {
 	Keymap  *map;
 	Command *cmd;
@@ -75,7 +98,7 @@ void linedown(Window *w, int n) {
 
 void charleft(Window *w, int n) {
   if(w->q0 > 0) {
-	int q0 = w->q0--;
+	int q0 = w->q0 - n;
 	wsetselect(w, q0, q0);
 	wshow(w, q0);
   }
@@ -83,7 +106,7 @@ void charleft(Window *w, int n) {
 
 void charright(Window *w, int n) {
   if(w->q1 < w->nr) {
-	int q1 = w->q1++;
+	int q1 = w->q1 + n;
 	wsetselect(w, q1, q1);
 	wshow(w, q1);
   }
@@ -141,8 +164,8 @@ void wordf(Window *w, int i) {
   w->q1 = p1;
 }
 
-void self_insert(Window *w, char s, int n) {
-	int q0 = w->q0;
+void self_insert(Window *w, Rune s, int n) {
+	uint q0 = w->q0;
 	q0 = winsert(w, &s, n, q0);
 	wshow(w, q0 + 1);
 }
@@ -169,14 +192,14 @@ void keymap_set_key(Keymap *map, char k, char *cmd) {
 	}
 }
 
-void keymap_reset() {
+void keymap_reset(void) {
   /* Reset after command execution */
   cur_map = NULL;
   prefix = 0;
   map_mode = 0;
 }
 
-void keymap_exec(char *seq) {
+void keymap_exec(Rune *seq) {
   Command *cmd = NULL;
   for (int i = 0; seq[i] && !cmd; ++i) {
 	if (cur_map) {
@@ -186,7 +209,7 @@ void keymap_exec(char *seq) {
 		  break;
 		} else if (seq[i] == cur_map->k[j]) {
 		  map_mode = 1;
-		  if (map.iscmd) {
+		  if (cur_map->iscmd) {
 			cmd = cur_map->val[j].cmd;
 			break;
 		  } else
@@ -194,19 +217,19 @@ void keymap_exec(char *seq) {
 		}
 	  }
 	} else if (seq[i] == Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
-	  cur_map = *global_map;
+	  cur_map = global_map;
 	} else {
 	  self_insert(win, seq[i], prefix ? prefix : 1);
 	  keymap_reset();
 	}
   }
   if (cmd != NULL) {
-	switch (cmd.argc) {
+	switch (cmd->argc) {
 	case 1:
-	  (*cmd.f1)(win);
+	  (*cmd->f1)(win);
 	  break;
 	case 2:
-	  (*cmd.f2)(win, prefix ? prefix : 1);
+	  (*cmd->f2)(win, prefix ? prefix : 1);
   	  break;
 	}
 	keymap_reset();
