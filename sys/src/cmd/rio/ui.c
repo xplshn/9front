@@ -25,7 +25,7 @@
 
 typedef struct {
   char *s;
-  void (*f)();
+  void (*f0)(void);
   void (*f1)(Window *w);
   void (*f2)(Window *w, int n);
   int argc;
@@ -184,8 +184,14 @@ void keymap_set_key(Keymap *map, char k, char *cmd) {
 	  c->s = prim[i].s;
 	  c->argc = prim[i].argc;
 	  switch(prim[i].argc) {
+	  case 0:
+		c->f0 = prim[i].f;
+		break;
 	  case 1:
 		c->f1 = prim[i].f;
+		break;
+	  case 2:
+		c->f2 = prim[i].f;
 		break;
 	  }
 	  cmap->iscmd = 1;
@@ -224,7 +230,7 @@ void keymap_exec(Rune *seq) {
 		}
 	  }
 	} else if (seq[i] == Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
-	  int n;
+	  int n = -1;
 	  char k = seq[i];
 	  if (k == Kctl) {
 		n = 0;
@@ -233,7 +239,8 @@ void keymap_exec(Rune *seq) {
 	  } else if (k == Kshift) {
 		n = 2;
 	  }
-	  cur_map = global_map->val[n];
+	  if (n > 0)
+		cur_map = global_map->val[n];
 	} else {
 	  self_insert(win, seq[i], prefix ? prefix : 1);
 	  keymap_reset();
@@ -241,6 +248,9 @@ void keymap_exec(Rune *seq) {
   }
   if (cmd != NULL) {
 	switch (cmd->argc) {
+	case 0:
+	  (*cmd->f0)();
+	  break;
 	case 1:
 	  (*cmd->f1)(win);
 	  break;
@@ -255,10 +265,39 @@ void keymap_exec(Rune *seq) {
 }
 
 Keydef keys[] = {
-  {"C-x", "cut"}, {"C-y", "copy"}, {"C-v", "paste"}
+  {"C-x", "cut"}, {"C-c", "copy"}, {"C-v", "paste"}, 0
 };
 
+Keymap* keymap_new(int n) {
+  Keymap* map;
+  map = malloc(sizeof(Keymap));
+  map->k   = malloc(n * sizeof(int));
+  map->val = malloc(n * sizeof(Keymap));
+  return map;
+}
+
+void keymap_free(Keymap* map) {
+  for(int i = 0; i < map->n; i++)
+	keymap_free(map->val[i]);
+	free(map->k);
+	free(map);
+}
+
+void keymap_copy(Keymap* dest, Keymap* map) {
+  if(dest->n < map->n) {
+	keymap_free(dest);
+	dest = keymap_new(map->n + 3);
+  }
+  for(int i = 0; i < map->n; i++) {
+	dest->k[i]   = map->k[i];
+	dest->val[i] = map->val[i];
+  }
+}
+
 void keymap_load(Keydef keys[]) {
+  if(global_map == NULL)
+    global_map = keymap_new(3);
+
   for(int i=0; keys[i].k; i++) {
 	cur_map = NULL;
 	for(int j=0; keys[i].k[j]; j++) {
@@ -267,26 +306,26 @@ void keymap_load(Keydef keys[]) {
 		continue;
 
 	  if ((k == 'C') || (k == 'M') || (k == 'S')) {
-		int i;
+		int n = -1;
 		if (k == 'C') {
 		  k = Kctl;
-		  i = 0;
+		  n = 0;
 		} else if (k == 'M') {
 		  k = Kalt;
-		  i = 1;
+		  n = 1;
 		} else if (k == 'S') {
 		  k = Kshift;
-		  i = 2;
+		  n = 2;
 		}
-		if (cur_map == NULL && global_map->val[i] != NULL) {
-		  cur_map = global_map->val[i];
-		} else {
-		  int n = 3;
-		  cur_map = malloc(sizeof(Keymap));
-		  cur_map->k   = malloc(n * sizeof(int));
-		  cur_map->val = malloc(n * sizeof(Keymap));
-		  global_map->k[i] = k;
-		  global_map->val[i] = cur_map;
+		if (n > 0) {
+		  if (cur_map == NULL && global_map->val[n] != NULL) {
+			cur_map = global_map->val[n];
+		  } else {
+			cur_map = keymap_new(3);
+
+			global_map->k[n] = k;
+			global_map->val[n] = cur_map;
+		  }
 		}
 	  } else
 		keymap_set_key(cur_map, k, keys[i].cmd);
@@ -296,10 +335,6 @@ void keymap_load(Keydef keys[]) {
 }
 
 void main(int argc, char *argv) {
-  int n = 3;
-  global_map = malloc(sizeof(Keymap));
-  global_map->k   = malloc(n * sizeof(int));
-  global_map->val = malloc(n * sizeof(Keymap));
   keymap_load(keys);
 
   char i = 1;
