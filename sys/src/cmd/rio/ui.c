@@ -34,12 +34,11 @@ typedef struct {
 typedef struct keymap Keymap;
 typedef struct keymap {
   char *k;
+  Keymap **val; // Array of Keymap*
   int n;
+
   bool iscmd;
-  union {
-	Keymap  *map;
-	Command *cmd;
-  } *val;
+  Command *cmd;
 } Keymap;
 
 typedef struct {
@@ -180,15 +179,20 @@ void keymap_set_key(Keymap *map, char k, char *cmd) {
   for (int i = 0; prim[i].s && !match; ++i) {
 	printf("%d %s\n", i, prim[i].s);
 	if (strcmp(prim[i].s, cmd) == 0) {
+	  Keymap  *cmap = malloc(sizeof(Keymap));
 	  Command *c = malloc(sizeof(Command));
+	  c->s = prim[i].s;
 	  c->argc = prim[i].argc;
 	  switch(prim[i].argc) {
 	  case 1:
 		c->f1 = prim[i].f;
 		break;
 	  }
+	  cmap->iscmd = 1;
+	  cmap->cmd = c;
+	  
 	  map->k[n] = k;
-	  map->val[n].cmd = c;
+	  map->val[n] = cmap;
 	  map->n = ++n;
 	  match = 1;
 	}
@@ -212,15 +216,24 @@ void keymap_exec(Rune *seq) {
 		  break;
 		} else if (seq[i] == cur_map->k[j]) {
 		  map_mode = 1;
-		  if (cur_map->iscmd) {
-			cmd = cur_map->val[j].cmd;
-		  } else
-			cur_map = cur_map->val[j].map;
+		  cur_map = cur_map->val[j];
+		}
+		if (cur_map->iscmd) {
+		  cmd = cur_map->cmd;
 		  break;
 		}
 	  }
-	} else if (seq[i] == 24) {//Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
-	  cur_map = global_map;
+	} else if (seq[i] == Kctl || seq[i] == Kalt || seq[i] == Kmod4)  {
+	  int n;
+	  char k = seq[i];
+	  if (k == Kctl) {
+		n = 0;
+	  } else if (k == Kalt) {
+		n = 1;
+	  } else if (k == Kshift) {
+		n = 2;
+	  }
+	  cur_map = global_map->val[n];
 	} else {
 	  self_insert(win, seq[i], prefix ? prefix : 1);
 	  keymap_reset();
@@ -265,15 +278,15 @@ void keymap_load(Keydef keys[]) {
 		  k = Kshift;
 		  i = 2;
 		}
-		if (cur_map == NULL && global_map->val[i].map) {
-		  cur_map = global_map->val[i].map;
+		if (cur_map == NULL && global_map->val[i] != NULL) {
+		  cur_map = global_map->val[i];
 		} else {
 		  int n = 3;
 		  cur_map = malloc(sizeof(Keymap));
 		  cur_map->k   = malloc(n * sizeof(int));
 		  cur_map->val = malloc(n * sizeof(Keymap));
 		  global_map->k[i] = k;
-		  global_map->val[i].map = cur_map;
+		  global_map->val[i] = cur_map;
 		}
 	  } else
 		keymap_set_key(cur_map, k, keys[i].cmd);
@@ -295,8 +308,10 @@ void main(int argc, char *argv) {
   /* 	i = getchar(); */
   /* 	keymap_exec(&i); */
   /* } */
-  char s[] = {24, 'x', 0};
+  char s[] = {29, 'x', 0};
   keymap_exec(s);
-  /* s[0] = 'x'; */
-  /* keymap_exec(s); */
+  s[1] = 'y';
+  keymap_exec(s);
+  s[1] = 'v';
+  keymap_exec(s);
 }
