@@ -155,7 +155,7 @@ enum
 	MinWater	= 20000,	/* room to leave available when reallocating */
 };
 
-static uint
+uint
 winsert(Window *w, Rune *r, int n, uint q0)
 {
 	uint m;
@@ -241,7 +241,7 @@ wfill(Window *w)
 	}
 }
 
-static void
+void
 wsetselect(Window *w, uint q0, uint q1)
 {
 	int p0, p1;
@@ -558,7 +558,7 @@ showcandidates(Window *w, Completion *c)
 	free(rp);
 }
 
-static int
+int
 wbswidth(Window *w, Rune c)
 {
 	uint q, eq, stop;
@@ -709,7 +709,7 @@ wsend(Window *w)
 	wshow(w, w->nr);
 }
 
-static void
+void
 wdelete(Window *w, uint q0, uint q1)
 {
 	uint n, p0, p1;

@@ -341,3 +341,14 @@ int		snarfversion;	/* updated each time it is written */
 int		messagesize;		/* negotiated in 9P version setup */
 int		shiftdown;
 int		debug;
+
+enum {
+	Mmod4 = 1<<0,
+	Mctl = 1<<1,
+	Malt = 1<<2,
+	Mshift = 1<<3,
+};
+int mod;
+typedef struct {
+  char *k, *cmd;
+} Keydef;
