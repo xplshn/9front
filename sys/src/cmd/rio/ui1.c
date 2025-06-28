@@ -38,31 +38,19 @@ typedef struct {
 typedef struct keymap Keymap;
 typedef struct keymap {
   Rune *k;
-  Keymap **val; // Array of Keymap*
+  Keymap **val; // Array of Keymap pointer
   int n, len;
 
   bool iscmd;
   Command *cmd;
 } Keymap;
 
-/* typedef struct { */
-/*   char *k, *cmd; */
-/* } Keydef; */
-
-/* enum { */
-/*   Mctl  , */
-/*   Malt  , */
-/*   Mshift, */
-/*   Mesc  , */
-/*   Mmod4 , */
-/* }; */
-
 extern Window* input;
 Keymap *global_map, *cur_map;
 int prefix, map_mode;
 
 int runecmp(Rune r1, Rune r2) {
-  char str[4];
+  char str[4]; // UTFmax + 1
   if (runetochar(str, &r1) == Runeerror)
 	return 0;
   return utfrune(str, r2) != nil;
@@ -105,7 +93,7 @@ void lineup(Window *w, int n) {
 
 void linedown(Window *w, int n) {
   int q0;
-  /* q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*w->font->height)); */
+  q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*w->font->height));
   wsetorigin(w, q0, TRUE);
 }
 
@@ -113,33 +101,36 @@ void charleft(Window *w, int n) {
   print("left\n");
   if(w->q0 > 0) {
 	int q0 = w->q0 - n;
-	wsetselect(w, q0, q0);
+	/* wsetselect(w, q0, q0); */
+	wsetselect(w, q0, shiftdown ? w->q1 : q0);
 	wshow(w, q0);
   }
 }
 
 void charright(Window *w, int n) {
+  print("right\n");
   if(w->q1 < w->nr) {
 	int q1 = w->q1 + n;
-	wsetselect(w, q1, q1);
+	/* wsetselect(w, q1, q1); */
+	wsetselect(w, shiftdown ? w->q0 : q1, q1);
 	wshow(w, q1);
   }
 }
 
 void cut(Window *w) {
   print("cut\n");
-  /* wsnarf(w); */
-  /* wcut(w); */
+  wsnarf(w);
+  wcut(w);
 }
 
 void copy(Window *w) {
   print("copy\n");
-  /* wsnarf(w); */
+  wsnarf(w);
 }
 
 void paste(Window *w) {
   print("paste\n");
-  /* wpaste(w); */
+  wpaste(w);
 }
 
 /* void exit() { */
@@ -174,21 +165,46 @@ void delchar(Window *w, Rune r) {
   }
 }
 
-void wordf(Window *w, int i) {
-  uint p0, p1;
+void wordleft(Window *w, int i) {
+  uint q0, q1, skip;
 
-  p0 = w->q0;
-  p1 = w->q1;
-  if(i > 0)
-	while (i-- > 0)
-	  while(p0 > 0 && w->r[p0-1] != ' ' && w->r[p0-1] != '\t' && w->r[p0-1] != '\n')
-		p0--;
-  else
-	while (i++ > 0)
-	  while(p1 < w->nr && w->r[p1] != ' ' && w->r[p1] != '\t' && w->r[p1] != '\n')
-		p1++;
-  w->q0 = p0;
-  w->q1 = p1;
+  q0 = w->q0;
+  q1 = w->q1;
+  print("%d %d, ", q0, q1);
+  while (i-- > 0 && q0 > 0) {
+	print("i%d %d, ", i, shiftdown);
+	skip = isspace(w->r[q0 - 1]);
+	while(q0 > 0 && (!isspace(w->r[q0 - 1]) || skip)) {
+	  q0--;
+	  skip = 0;
+	}
+  }
+  print("%d %d, ", q0, q1);
+  w->q0 = q0;
+  w->q1 = q1;
+  wsetselect(w, q0, shiftdown ? w->q1 : q0);
+  wshow(w, q1);
+}
+
+void wordright(Window *w, int i) {
+  uint q0, q1, skip;
+
+  q0 = w->q0;
+  q1 = w->q1;
+  print("%d %d, ", q0, q1);
+  while (i-- > 0) {
+	print("i%d %d, ", i, shiftdown);
+	skip = isspace(w->r[q1]);
+	while(q1 < w->nr && (!isspace(w->r[q1]) || skip)) {
+	  q1++;
+	  skip = 0;
+	}
+  }
+  print("%d %d, ", q0, q1);
+  w->q0 = q0;
+  w->q1 = q1;
+  wsetselect(w, shiftdown ? w->q0 : q1, q1);
+  wshow(w, q1);
 }
 
 void self_insert(Window *w, Rune s, int n) {
@@ -201,8 +217,9 @@ void self_insert(Window *w, Rune s, int n) {
 void confirmexit(void);
 
 struct { const char *s; int argc; void (*f); } prim[] = {
-  /* {"bol", 1, bol}, {"eol", 1, eol}, {"bob", 1, bob}, {"eob", 1, eob}, */
-  {"charleft", 2, charleft},
+  {"bol", 1, bol}, {"eol", 1, eol}, {"bob", 1, bob}, {"eob", 1, eob},
+  {"left", 2, charleft}, {"right", 2, charright}, {"up", 2, lineup}, {"down", 2, linedown},  
+  {"wordleft", 2, wordleft}, {"wordright", 2, wordright},
   {"cut", 1, cut}, {"copy", 1, copy}, {"paste", 1, paste},
   {"exit", 0, confirmexit}, nil
 };
@@ -245,8 +262,13 @@ void keymap_reset(void) {
   map_mode = 0;
 }
 
-struct {char *s; Rune r;} keys_mapped[] = { {"C", Kctl}, {"left", Kleft} };
-/* , Kalt, Kshift, Kleft, Kright, Kup, Kdown}; */
+/* Special keys mapped for handling. */
+struct {char *s; Rune r;} keys_mapped[] = {
+  {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
+  {"left", Kleft}, {"right", Kright},
+  {"up", Kup}, {"down", Kdown},
+};
+
 void keymap_exec(Rune seq) {
   Command *cmd = NULL;
   Window  *win = input;
@@ -390,8 +412,8 @@ void keymap_load(Keydef key_map[]) {
   print("loaded");
   /* exits("loaded"); */
 }
-
-static void
+ 
+void
 wkeyctl(Window *w, Rune r)
 {
 	keymap_exec(r);

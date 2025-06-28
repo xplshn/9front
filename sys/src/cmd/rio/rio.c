@@ -106,7 +106,9 @@ int errorshouldabort = 0;
 
 Keydef key_map[] = {
   {"C-x", "cut"}, {"C-c", "copy"}, {"C-v", "paste"}, {"C-Q", "exit"},
-  {"left", "charleft"},
+  {"left", "left"}, {"right", "right"}, {"up", "up"}, {"down", "down"},
+  {"C-left", "wordleft"}, {"C-right", "wordright"},
+  {"C-a", "bol"}, {"C-e", "eol"}, {"M-S-<", "bob"}, {"M-S->", "eob"},
   nil
 };
 void keymap_load(Keydef key_map[]);
