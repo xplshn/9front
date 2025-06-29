@@ -766,7 +766,8 @@ wpaste(Window *w)
 		wsetselect(w, q0, q0);
 	}else{
 		q0 = winsert(w, snarf, nsnarf, w->q0);
-		wsetselect(w, q0, q0+nsnarf);
+		q0 += nsnarf;
+		wsetselect(w, q0, q0);
 	}
 }
 

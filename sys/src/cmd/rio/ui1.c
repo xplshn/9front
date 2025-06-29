@@ -143,7 +143,7 @@ void paste(Window *w) {
 /* 	close(f); */
 /* } */
 
-void delchar(Window *w, Rune r) {
+void delete_fn(Window *w, Rune r) {
   /* switch(r) */
   /* case Kbs:	/\* ^H: erase character *\/ */
   /* case Knack:	/\* ^U: erase line *\/ */
@@ -163,6 +163,16 @@ void delchar(Window *w, Rune r) {
 	wdelete(w, q0, q0 + nb);
 	wsetselect(w, q0, q0);
   }
+}
+
+void delchar(Window *w, int i) {
+  while (i-- > 0)
+	delete_fn(w, Kbs);
+}
+
+void delword(Window *w, int i) {
+  while (i-- > 0)
+	delete_fn(w, Ketb);
 }
 
 void wordleft(Window *w, int i) {
@@ -221,7 +231,15 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"left", 2, charleft}, {"right", 2, charright}, {"up", 2, lineup}, {"down", 2, linedown},  
   {"wordleft", 2, wordleft}, {"wordright", 2, wordright},
   {"cut", 1, cut}, {"copy", 1, copy}, {"paste", 1, paste},
+  {"find", 1, wlook}, {"plumb", 1, wplumb},
+  {"delchar", 2, delchar}, {"delword", 2, delword},
   {"exit", 0, confirmexit}, nil
+};
+
+/* Special keys mapped for handling. */
+struct {char *s; Rune r;} keys_mapped[] = {
+  {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
+  {"left", Kleft}, {"right", Kright}, {"up", Kup}, {"down", Kdown},
 };
 
 void keymap_set_key(Keymap *map, Rune k, char *cmd) {
@@ -262,23 +280,14 @@ void keymap_reset(void) {
   map_mode = 0;
 }
 
-/* Special keys mapped for handling. */
-struct {char *s; Rune r;} keys_mapped[] = {
-  {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
-  {"left", Kleft}, {"right", Kright},
-  {"up", Kup}, {"down", Kdown},
-};
-
-void keymap_exec(Rune seq) {
+void keymap_exec(Window *win, Rune seq) {
   Command *cmd = NULL;
-  Window  *win = input;
   print("%x %x ", seq, mod);
-  int i = 0;
-  /* for (int i = 0; mods[i] && !cmd; ++i) */
-  {
+
   for (int j = 0; j < nelem(keys_mapped); j++) {
 	print("%x %x %d", keys_mapped[j].r, j, (runecmp(seq, Kctl)));
-	if (mod || runecmp(seq, keys_mapped[j].r)) {
+	if (mod) {
+	  /* Don't handle SHIFT key here */
 	  print("mod ");
 	  cur_map = global_map->val[j];
 	  if (mod && Mctl) {
@@ -286,6 +295,11 @@ void keymap_exec(Rune seq) {
 		if (seq <= 26)
 		  seq += 96;
 	  }
+	  break;
+	} else if (runecmp(seq, keys_mapped[j].r)) {
+	  /* No leading modifier key - typically a command */
+	  cur_map = global_map->val[j];
+	  cmd = cur_map->cmd;
 	  break;
 	}
   }
@@ -313,7 +327,7 @@ void keymap_exec(Rune seq) {
 	self_insert(win, seq, prefix ? prefix : 1);
 	keymap_reset();
   }
-  }
+
   if (cmd != NULL) {
 	print("cmd ");
 	switch (cmd->argc) {
@@ -389,16 +403,18 @@ void keymap_load(Keydef key_map[]) {
 		}
 	  }
 	  if (n > -1) {
-		if (cur_map == NULL && global_map->val[n] != NULL) {
-		  cur_map = global_map->val[n];
-		  print("existing %d", n);
-		} else {
-		  print("new %d", n);
-		  cur_map = keymap_new(3);
+		if (cur_map == NULL) {
+		  if (global_map->val[n] != NULL) {
+			cur_map = global_map->val[n];
+			print("existing %d", n);
+		  } else {
+			print("new %d", n);
+			cur_map = keymap_new(3);
 
-		  global_map->n++;
-		  global_map->k[n] = r;
-		  global_map->val[n] = cur_map;
+			global_map->n++;
+			global_map->k[n] = r;
+			global_map->val[n] = cur_map;
+		  }
 		}
 	  } else
 		r = k;
@@ -416,5 +432,5 @@ void keymap_load(Keydef key_map[]) {
 void
 wkeyctl(Window *w, Rune r)
 {
-	keymap_exec(r);
+ keymap_exec(w, r);
 }
