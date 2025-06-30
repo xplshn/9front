@@ -45,7 +45,6 @@ typedef struct keymap {
   Command *cmd;
 } Keymap;
 
-extern Window* input;
 Keymap *global_map, *cur_map;
 int prefix, map_mode;
 
@@ -99,22 +98,24 @@ void linedown(Window *w, int n) {
 
 void charleft(Window *w, int n) {
   print("left\n");
-  if(w->q0 > 0) {
-	int q0 = w->q0 - n;
-	/* wsetselect(w, q0, q0); */
-	wsetselect(w, q0, shiftdown ? w->q1 : q0);
-	wshow(w, q0);
+  int q0 = w->q0;
+  if(q0 > 0) {
+	q0 = q0 - n;
   }
+  /* wsetselect(w, q0, q0); */
+  wsetselect(w, q0, shiftdown ? w->q1 : q0);
+  wshow(w, q0);
 }
 
 void charright(Window *w, int n) {
   print("right\n");
-  if(w->q1 < w->nr) {
-	int q1 = w->q1 + n;
-	/* wsetselect(w, q1, q1); */
-	wsetselect(w, shiftdown ? w->q0 : q1, q1);
-	wshow(w, q1);
+  int q1 = w->q1;
+  if(q1 < w->nr) {
+	q1 = q1 + n;
   }
+  /* wsetselect(w, q1, q1); */
+  wsetselect(w, shiftdown ? w->q0 : q1, q1);
+  wshow(w, q1);
 }
 
 void cut(Window *w) {
@@ -240,7 +241,21 @@ struct { const char *s; int argc; void (*f); } prim[] = {
 struct {char *s; Rune r;} keys_mapped[] = {
   {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
   {"left", Kleft}, {"right", Kright}, {"up", Kup}, {"down", Kdown},
+  {"backspace", Kbs},  
 };
+// {"tab", 0x09}, {"ret", 0x0a}
+
+int keymap_find(Keymap* cur_map, Rune k) {
+  int found = -1;
+  for (int j = 0; j < cur_map->n; ++j) {
+	if (runecmp(k, cur_map->k[j])) {
+	  /* cur_map = cur_map->val[j]; */
+	  found = j;
+	  break;
+	}
+  }
+  return found;
+}
 
 void keymap_set_key(Keymap *map, Rune k, char *cmd) {
   int n = map->n, match = 0;
@@ -282,29 +297,45 @@ void keymap_reset(void) {
 
 void keymap_exec(Window *win, Rune seq) {
   Command *cmd = NULL;
+  int k, found = 0;
   print("%x %x ", seq, mod);
-
-  for (int j = 0; j < nelem(keys_mapped); j++) {
-	print("%x %x %d", keys_mapped[j].r, j, (runecmp(seq, Kctl)));
-	if (mod) {
-	  /* Don't handle SHIFT key here */
-	  print("mod ");
-	  cur_map = global_map->val[j];
-	  if (mod && Mctl) {
-		print("ctl %d", (seq <= 26));
-		if (seq <= 26)
-		  seq += 96;
+  if (cur_map == NULL) {
+	cur_map = global_map;
+	found = 1;
+  }
+  while (found && !cur_map->iscmd) {
+	found = 0;
+	for (int j = 0; j < cur_map->n; j++) {
+	  /* print("%x %x %d,", keys_mapped[j].r, j, (runecmp(seq, Kctl))); */
+	  if (mod) {
+		/* Don't handle SHIFT here */
+		if (mod && Mctl)
+		  k = 0;
+		else if (mod && Mctl)
+		  k = 1;
+		else if (mod && Mctl)
+		  k = 2;
+	  
+		/* print("mod "); */
+		cur_map = cur_map->val[k];
+		if (mod && Mctl) {
+		  /* print("ctl %d", (seq <= 26)); */
+		  if (seq <= 26)
+			seq += 96;
+		}
+		mod = 0;
+		found = 1;
+		break;
+	  } else if (runecmp(seq, cur_map->k[j])) {
+		/* No leading modifier key - typically a command */
+		cur_map = cur_map->val[j];
+		found = 1;
+		break;
 	  }
-	  break;
-	} else if (runecmp(seq, keys_mapped[j].r)) {
-	  /* No leading modifier key - typically a command */
-	  cur_map = global_map->val[j];
-	  cmd = cur_map->cmd;
-	  break;
 	}
   }
 
-  if (cur_map) {
+  if (0 && cur_map) {
 	for (int j = 0; j < cur_map->n; ++j) {
 	  print("curmap %d %d %d %d\n", cur_map->n,
 			(map_mode == 0 && seq >= '0' && seq <= '9'),
@@ -322,29 +353,32 @@ void keymap_exec(Window *win, Rune seq) {
 		break;
 	  }
 	}
+  }
+  if (found) {
+	cmd = cur_map->cmd;
+	if (cmd != NULL) {
+	  print("cmd %s", cmd->s);
+	  switch (cmd->argc) {
+	  case 0:
+		(*cmd->f0)();
+		break;
+	  case 1:
+		(*cmd->f1)(win);
+		break;
+	  case 2:
+		(*cmd->f2)(win, prefix ? prefix : 1);
+		break;
+	  }
+	  keymap_reset();
+	} else {
+	  // No binding
+	}
   } else {
 	print("insert ");
 	self_insert(win, seq, prefix ? prefix : 1);
 	keymap_reset();
   }
-
-  if (cmd != NULL) {
-	print("cmd ");
-	switch (cmd->argc) {
-	case 0:
-	  (*cmd->f0)();
-	  break;
-	case 1:
-	  (*cmd->f1)(win);
-	  break;
-	case 2:
-	  (*cmd->f2)(win, prefix ? prefix : 1);
-  	  break;
-	}
-	keymap_reset();
-  } else {
-	// No binding
-  }
+  
 }
 
 Keymap* keymap_new(int n) {
@@ -352,6 +386,7 @@ Keymap* keymap_new(int n) {
   map = emalloc(sizeof(Keymap));
   map->n   = 0;
   map->len = n;
+  map->iscmd = 0;
   map->k   = emalloc(n * sizeof(int));
   map->val = emalloc(n * sizeof(Keymap));
   return map;
@@ -375,19 +410,35 @@ void keymap_copy(Keymap* dest, Keymap* map) {
   }
 }
 
+Keymap* keymap_grow(Keymap* map) {
+  Keymap* dest;
+  dest = keymap_new(map->n + 3);
+  dest->n = map->n;
+  for(int i = 0; i < map->n; i++) {
+	dest->k[i]   = map->k[i];
+	dest->val[i] = map->val[i];
+  }
+  free(map);
+  return dest;
+}
+
 void keymap_load(Keydef key_map[]) {
+  Keymap* prev_map;
+  Rune r;
+
   if(global_map == NULL)
     global_map = keymap_new(nelem(keys_mapped));
 
   for(int i=0; key_map[i].k; i++) {
 	cur_map = NULL;
-	print("load %d, ", i); 
+	prev_map = global_map;
+	print("\n load %d, ", i); 
 	for(int j=0; key_map[i].k[j]; j++) {
 	  print("load1 %d, ", j); 
 	  char k = key_map[i].k[j];
 	  char *k1 = key_map[i].k + j;
-	  Rune r;
-	  int n = -1;
+	  r = k;
+	  int n;
 	  if ((k == '-') || (k == ' '))
 		continue;
 
@@ -397,32 +448,31 @@ void keymap_load(Keydef key_map[]) {
 		if (strncmp(k1, keys_mapped[m].s, l) == 0) {
 		  print("matched %x %x ", l, m);
 		  r = keys_mapped[m].r;
-		  n = m;
 		  j += l - 1;
 		  break;
 		}
 	  }
-	  if (n > -1) {
-		if (cur_map == NULL) {
-		  if (global_map->val[n] != NULL) {
-			cur_map = global_map->val[n];
-			print("existing %d", n);
-		  } else {
-			print("new %d", n);
-			cur_map = keymap_new(3);
 
-			global_map->n++;
-			global_map->k[n] = r;
-			global_map->val[n] = cur_map;
-		  }
+	  if ((n = keymap_find((cur_map == NULL) ? prev_map : cur_map, r)) == -1) {
+		cur_map = keymap_new(1);
+		n = prev_map->n++;
+		prev_map->k[n] = r;
+		prev_map->val[n] = cur_map;
+		/* } else if (cur_map->iscmd) { */
+		/* 	print("Key %x mapped to a command", r); */
+		/* 	exits("Mapping conflict"); */
+	  } else {
+		cur_map = prev_map->val[n];
+		if (cur_map->n >= cur_map->len) {
+		  print("grow %d >= %d ", cur_map->n, cur_map->len);
+		  cur_map = keymap_grow(cur_map);
+		  prev_map->val[n] = cur_map;
 		}
-	  } else
-		r = k;
-		
-	  if (cur_map == NULL)
-		cur_map = global_map;
-	  keymap_set_key(cur_map, r, key_map[i].cmd);
+	  }
+	  prev_map = cur_map;
 	}
+	print("Map %x to %s\n", r, key_map[i].cmd);
+	keymap_set_key(cur_map, r, key_map[i].cmd);
   }
   cur_map = NULL;
   print("loaded");
