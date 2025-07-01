@@ -1,8 +1,32 @@
-/* move char word line screen buffer */
-/* del  char word line */
-/* window obj n */
-/* n is repeat - derive from prefix */
+/**
+Support file for handling keybindings.
 
+Copyright (C) 2025  Anand Tamariya
+
+Author: Anand Tamariya <anand@gmail.com>
+Keywords: plan9, keybinding
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Commentary:
+ - move char word line screen buffer
+ - del  char word line
+ - window obj n
+ - n is repeat - derive from prefix
+*/
+
+/* Code: */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -166,12 +190,27 @@ void delete_fn(Window *w, Rune r) {
   }
 }
 
-void delchar(Window *w, int i) {
-  while (i-- > 0)
-	delete_fn(w, Kbs);
+void delcharl(Window *w, int i) {
+  int q0, q1;
+  if (i > 0) {
+	q0 = max(w->q0 - i, 0);
+	q1 = w->q1;
+	wdelete(w, q0, q1);
+	wsetselect(w, q0, q0);
+  }
 }
 
-void delword(Window *w, int i) {
+void delcharr(Window *w, int i) {
+  int q0, q1;
+  if (i > 0) {
+	q0 = w->q0;
+	q1 = min(w->q1 + i, w->nr);
+	wdelete(w, q0, q1);
+	wsetselect(w, q0, q0);
+  }
+}
+
+void delwordl(Window *w, int i) {
   while (i-- > 0)
 	delete_fn(w, Ketb);
 }
@@ -218,6 +257,13 @@ void wordright(Window *w, int i) {
   wshow(w, q1);
 }
 
+void delwordr(Window *w, int i) {
+  shiftdown = 1;
+  wordright(w, i);
+  cut(w);
+  shiftdown = 0;
+}
+
 void self_insert(Window *w, Rune s, int n) {
   print("insert %c\n", s);
   uint q0 = w->q0;
@@ -233,8 +279,9 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"wordleft", 2, wordleft}, {"wordright", 2, wordright},
   {"cut", 1, cut}, {"copy", 1, copy}, {"paste", 1, paste},
   {"find", 1, wlook}, {"plumb", 1, wplumb},
-  {"delchar", 2, delchar}, {"delword", 2, delword},
-  {"exit", 0, confirmexit}, nil
+  {"delcharl", 2, delcharl}, {"delcharr", 2, delcharr},
+  {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
+  {"exit", 0, confirmexit},
 };
 
 /* Special keys mapped for handling. */
@@ -297,8 +344,8 @@ void keymap_reset(void) {
 
 void keymap_exec(Window *win, Rune seq) {
   Command *cmd = NULL;
-  int k, found = 0;
-  print("%x %x ", seq, mod);
+  int k = -1, found = 0, modifier = mod;
+  print("%x %x ", seq, modifier);
   if (cur_map == NULL) {
 	cur_map = global_map;
 	found = 1;
@@ -306,26 +353,27 @@ void keymap_exec(Window *win, Rune seq) {
   while (found && !cur_map->iscmd) {
 	found = 0;
 	for (int j = 0; j < cur_map->n; j++) {
-	  /* print("%x %x %d,", keys_mapped[j].r, j, (runecmp(seq, Kctl))); */
-	  if (mod) {
+	  /* print("%d %x %x %x,", j, cur_map->k[j], keys_mapped[j].r, seq); */
+	  if (modifier) {
 		/* Don't handle SHIFT here */
-		if (mod && Mctl)
-		  k = 0;
-		else if (mod && Mctl)
-		  k = 1;
-		else if (mod && Mctl)
-		  k = 2;
-	  
-		/* print("mod "); */
-		cur_map = cur_map->val[k];
-		if (mod && Mctl) {
-		  /* print("ctl %d", (seq <= 26)); */
+		if (modifier & Mctl) {
+		  k = keymap_find(cur_map, Kctl);
+		  modifier ^= Mctl;
 		  if (seq <= 26)
 			seq += 96;
+		} else if (modifier & Malt) {
+		  k = keymap_find(cur_map, Kalt);
+		  modifier ^= Malt;
+		} else if (modifier & Mmod4) {
+		  k = keymap_find(cur_map, Kmod4);
+		  modifier ^= Mmod4;
 		}
-		mod = 0;
-		found = 1;
-		break;
+		if (k > -1) {
+		  cur_map = cur_map->val[k];
+		  found = 1;
+		  break;
+		}
+		/* modifier = 0; */
 	  } else if (runecmp(seq, cur_map->k[j])) {
 		/* No leading modifier key - typically a command */
 		cur_map = cur_map->val[j];

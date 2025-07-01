@@ -110,7 +110,8 @@ Keydef key_map[] = {
   {"C-left", "wordleft"}, {"C-right", "wordright"},
   {"C-a", "bol"}, {"C-e", "eol"}, {"M-S-<", "bob"}, {"M-S->", "eob"},
   {"C-f", "find"}, {"C-ret", "plumb"},
-  {"backspace", "delchar"}, {"C-backspace", "delword"},
+  {"backspace", "delcharl"}, {"C-d", "delcharr"},
+  {"C-h", "delwordl"}, {"C-D", "delwordr"},
   nil
 };
 void keymap_load(Keydef key_map[]);

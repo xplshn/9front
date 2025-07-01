@@ -840,8 +840,11 @@ wplumb(Window *w)
 	plumbfree(m);
 }
 
+void
+wkeyctl(Window *w, Rune r);
+
 static void
-wkeyctl(Window *w, Rune r)
+wkeyctl1(Window *w, Rune r)
 {
 	uint q0 ,q1;
 	int n, nb;
