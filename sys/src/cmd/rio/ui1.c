@@ -60,17 +60,17 @@ typedef struct {
 } Command;
 
 typedef struct keymap Keymap;
-typedef struct keymap {
+struct keymap {
   Rune *k;
   Keymap **val; // Array of Keymap pointer
   int n, len;
 
   bool iscmd;
   Command *cmd;
-} Keymap;
+};
 
-Keymap *global_map, *cur_map;
-int prefix, map_mode;
+static Keymap *global_map, *cur_map;
+static int prefix, map_mode;
 
 int runecmp(Rune r1, Rune r2) {
   char str[4]; // UTFmax + 1
@@ -84,24 +84,26 @@ void bol(Window *w) {
   if(w->q0 == 0 || w->q0 == w->qh || w->r[w->q0-1] == '\n')
 	return;
   nb = wbswidth(w, 0x15 /* ^U */);
-  wsetselect(w, w->q0-nb, w->q0-nb);
+  wsetselect(w, w->q0-nb, shiftdown ? w->q1 : w->q0-nb);
   wshow(w, w->q0);
 }
 
 void eol(Window *w) {
-  int q0 = w->q0;
-  while(q0 < w->nr && w->r[q0] != '\n')
-	q0++;
-  wsetselect(w, q0, q0);
-  wshow(w, w->q0);
+  int q1 = w->q1;
+  while(q1 < w->nr && w->r[q1] != '\n')
+	q1++;
+  wsetselect(w, shiftdown ? w->q0 : q1, q1);
+  wshow(w, w->q1);
 }
 
 void bob(Window *w) {
-  wshow(w, 0);
+  wsetorigin(w, 0, TRUE);
+  if (shiftdown) wsetselect(w, 0, w->nr);
 }
 
 void eob(Window *w) {
-  wshow(w, w->nr);
+  wsetorigin(w, w->nr, TRUE);
+  if (shiftdown) wsetselect(w, 0, w->nr);
 }
 
 void point(Window *w) {
@@ -288,9 +290,8 @@ struct { const char *s; int argc; void (*f); } prim[] = {
 struct {char *s; Rune r;} keys_mapped[] = {
   {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
   {"left", Kleft}, {"right", Kright}, {"up", Kup}, {"down", Kdown},
-  {"backspace", Kbs},  
+  {"backspace", Kbs}, {"tab", 0x09}, {"ret", 0x0a}
 };
-// {"tab", 0x09}, {"ret", 0x0a}
 
 int keymap_find(Keymap* cur_map, Rune k) {
   int found = -1;
@@ -359,7 +360,8 @@ void keymap_exec(Window *win, Rune seq) {
 		if (modifier & Mctl) {
 		  k = keymap_find(cur_map, Kctl);
 		  modifier ^= Mctl;
-		  if (seq <= 26)
+		  /* Exclude TAB and RET */
+		  if (seq <= 26 && seq != 0x09 && seq != 0x0a)
 			seq += 96;
 		} else if (modifier & Malt) {
 		  k = keymap_find(cur_map, Kalt);
@@ -373,7 +375,6 @@ void keymap_exec(Window *win, Rune seq) {
 		  found = 1;
 		  break;
 		}
-		/* modifier = 0; */
 	  } else if (runecmp(seq, cur_map->k[j])) {
 		/* No leading modifier key - typically a command */
 		cur_map = cur_map->val[j];
@@ -527,8 +528,6 @@ void keymap_load(Keydef key_map[]) {
   /* exits("loaded"); */
 }
  
-void
-wkeyctl(Window *w, Rune r)
-{
+void wkeyctl(Window *w, Rune r) {
  keymap_exec(w, r);
 }
