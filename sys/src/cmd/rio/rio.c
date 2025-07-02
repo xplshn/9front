@@ -109,7 +109,7 @@ Keydef key_map[] = {
   {"left", "left"}, {"right", "right"}, {"up", "up"}, {"down", "down"},
   {"C-left", "wordleft"}, {"C-right", "wordright"},
   {"C-a", "bol"}, {"C-e", "eol"}, {"M-S-<", "bob"}, {"M-S->", "eob"},
-  {"C-f", "find"}, {"C-ret", "plumb"},
+  {"C-f", "find"}, {"C-ret", "plumb"}, {"C-tab", "autosuggest"},
   {"backspace", "delcharl"}, {"C-d", "delcharr"},
   {"C-h", "delwordl"}, {"C-D", "delwordr"},
   {"del", "interrupt"},

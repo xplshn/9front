@@ -479,7 +479,7 @@ windfilewidth(Window *w, uint q0, int oneelement)
 	return q0-q;
 }
 
-static void
+void
 namecomplete(Window *w)
 {
 	int nstr, npath;

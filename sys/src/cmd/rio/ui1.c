@@ -294,7 +294,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"find", 1, wlook}, {"plumb", 1, wplumb},
   {"delcharl", 2, delcharl}, {"delcharr", 2, delcharr},
   {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
-  {"interrupt", 1, interrupt},
+  {"interrupt", 1, interrupt}, {"autosuggest", 1, namecomplete},
   {"exit", 0, confirmexit},
 };
 
