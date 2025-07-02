@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
 #include <draw.h>
 #include <thread.h>
 #include <cursor.h>
@@ -421,7 +422,7 @@ wrefresh(Window *w)
  * Need to do this in a separate proc because if process we're interrupting
  * is dying and trying to print tombstone, kernel is blocked holding p->debug lock.
  */
-static void
+void
 interruptproc(void *v)
 {
 	int *notefd;

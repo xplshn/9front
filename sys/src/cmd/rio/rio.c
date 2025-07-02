@@ -112,6 +112,7 @@ Keydef key_map[] = {
   {"C-f", "find"}, {"C-ret", "plumb"},
   {"backspace", "delcharl"}, {"C-d", "delcharr"},
   {"C-h", "delwordl"}, {"C-D", "delwordr"},
+  {"del", "interrupt"},
   nil
 };
 void keymap_load(Keydef key_map[]);

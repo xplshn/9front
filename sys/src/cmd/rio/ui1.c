@@ -29,6 +29,7 @@ Commentary:
 /* Code: */
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
 #include <draw.h>
 #include <thread.h>
 #include <cursor.h>
@@ -266,6 +267,16 @@ void delwordr(Window *w, int i) {
   shiftdown = 0;
 }
 
+void interrupt(Window *w) {
+  w->qh = w->nr;
+  wshow(w, w->qh);
+  if(w->notefd < 0)
+	return;
+  int *notefd = emalloc(sizeof(int));
+  *notefd = dup(w->notefd, -1);
+  proccreate(interruptproc, notefd, 4096);
+}
+
 void self_insert(Window *w, Rune s, int n) {
   print("insert %c\n", s);
   uint q0 = w->q0;
@@ -283,6 +294,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"find", 1, wlook}, {"plumb", 1, wplumb},
   {"delcharl", 2, delcharl}, {"delcharr", 2, delcharr},
   {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
+  {"interrupt", 1, interrupt},
   {"exit", 0, confirmexit},
 };
 
@@ -290,7 +302,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
 struct {char *s; Rune r;} keys_mapped[] = {
   {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
   {"left", Kleft}, {"right", Kright}, {"up", Kup}, {"down", Kdown},
-  {"backspace", Kbs}, {"tab", 0x09}, {"ret", 0x0a}
+  {"backspace", Kbs}, {"tab", 0x09}, {"ret", 0x0a}, {"del", Kdel}
 };
 
 int keymap_find(Keymap* cur_map, Rune k) {
@@ -375,6 +387,16 @@ void keymap_exec(Window *win, Rune seq) {
 		  found = 1;
 		  break;
 		}
+	  } else if (shiftdown && isalpha(cur_map->k[j])) {
+		/* compare after switching case */
+		char c = cur_map->k[j];
+		if (c == seq
+			|| ((c >= 'a' && c <= 'z') && (c - 32 == seq))
+			|| ((c >= 'A' && c <= 'Z') && (c + 32 == seq))) {
+			  cur_map = cur_map->val[j];
+			  found = 1;
+			  break;
+			}
 	  } else if (runecmp(seq, cur_map->k[j])) {
 		/* No leading modifier key - typically a command */
 		cur_map = cur_map->val[j];
