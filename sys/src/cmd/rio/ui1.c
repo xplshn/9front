@@ -49,6 +49,9 @@ void wsetselect(Window *w, uint q0, uint q1);
 void wdelete(Window *w, uint q0, uint q1);
 uint winsert(Window *w, Rune *r, int n, uint q0);
 
+void interruptproc(void *v);
+void namecomplete(Window *w);
+
 typedef int bool;
 /* #define NULL ((void*)0) */
 
@@ -98,29 +101,70 @@ void eol(Window *w) {
 }
 
 void bob(Window *w) {
-  wsetorigin(w, 0, TRUE);
-  if (shiftdown) wsetselect(w, 0, w->nr);
-}
-
-void eob(Window *w) {
-  wsetorigin(w, w->nr, TRUE);
-  if (shiftdown) wsetselect(w, 0, w->nr);
-}
-
-void point(Window *w) {
-  wsetselect(w, w->qh, w->qh);
+  wsetselect(w, 0, shiftdown ? w->q1 : 0);
   wshow(w, w->q0);
 }
 
-void lineup(Window *w, int n) {
-  int q0 = wbacknl(w, w->org, n);
+void eob(Window *w) {
+  wsetselect(w, shiftdown ? w->q0 : w->nr, w->nr);
+  wshow(w, w->q1);
+}
+
+void scrollup(Window *w, int n) {
+  int q0, l;
+  l = (w->Frame.r.max.y - w->Frame.r.min.y) / w->font->height;
+  q0 = wbacknl(w, w->org, n * l);
   wsetorigin(w, q0, TRUE);
 }  
 
-void linedown(Window *w, int n) {
-  int q0;
-  q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*w->font->height));
+void scrolldown(Window *w, int n) {
+  int q0, l;
+  l = (w->Frame.r.max.y - w->Frame.r.min.y) / w->font->height;
+  q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*l*w->font->height));
   wsetorigin(w, q0, TRUE);
+}
+
+void lineup(Window *w, int n) {
+  int q0, org, h;
+
+  org = w->org;
+  q0 = w->q0 - org;
+  h = w->font->height;
+  Point p = frptofchar(w, q0);
+  if (p.y >= w->Frame.r.max.y) {
+	wshow(w, q0);
+	p = frptofchar(w, q0 - w->org);
+  }
+  p.y -= n * h;
+  if (p.y < w->Frame.r.min.y) {
+	org = wbacknl(w, w->org, n);
+	wsetorigin(w, org, TRUE);
+	p.y += n * h;
+  }
+  q0 = w->org + frcharofpt(w, p);
+  wsetselect(w, q0, shiftdown ? w->q1 : q0);
+  wshow(w, q0);
+}
+
+void linedown(Window *w, int n) {
+  int q0, org, h;
+
+  org = w->org;
+  q0 = w->q0 - org;
+  h = w->font->height;
+  Point p = frptofchar(w, q0);
+  if (p.y >= w->Frame.r.max.y) {
+	wshow(w, q0);
+	p = frptofchar(w, q0 - w->org);
+  }
+  p.y += n * h;
+  if (p.y >= w->Frame.r.max.y) {
+	org = wbacknl(w, w->org, n);
+	wsetorigin(w, org, TRUE);
+  }
+  q0 = w->org + frcharofpt(w, p);
+  wsetselect(w, q0, q0);
+  wshow(w, q0);
 }
 
 void charleft(Window *w, int n) {
@@ -280,6 +324,7 @@ void interrupt(Window *w) {
 void self_insert(Window *w, Rune s, int n) {
   print("insert %c\n", s);
   uint q0 = w->q0;
+  cut(w);
   q0 = winsert(w, &s, n, q0);
   wshow(w, q0 + 1);
 }
@@ -295,6 +340,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"delcharl", 2, delcharl}, {"delcharr", 2, delcharr},
   {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
   {"interrupt", 1, interrupt}, {"autosuggest", 1, namecomplete},
+  {"scrollup", 2, scrollup}, {"scrolldown", 2, scrolldown},
   {"exit", 0, confirmexit},
 };
 
@@ -302,7 +348,9 @@ struct { const char *s; int argc; void (*f); } prim[] = {
 struct {char *s; Rune r;} keys_mapped[] = {
   {"C", Kctl}, {"M", Kalt}, {"S", Kshift}, {"mod4", Kmod4},
   {"left", Kleft}, {"right", Kright}, {"up", Kup}, {"down", Kdown},
-  {"backspace", Kbs}, {"tab", 0x09}, {"ret", 0x0a}, {"del", Kdel}
+  {"backspace", Kbs}, {"tab", 0x09}, {"ret", 0x0a}, {"del", Kdel},
+  {"spc", ' '}, {"pgup", Kpgup}, {"pgdown", Kpgdown},
+  {"home", Khome}, {"end", Kend},
 };
 
 int keymap_find(Keymap* cur_map, Rune k) {
@@ -551,5 +599,5 @@ void keymap_load(Keydef key_map[]) {
 }
  
 void wkeyctl(Window *w, Rune r) {
- keymap_exec(w, r);
+  if(!w->mouseopen) keymap_exec(w, r);
 }

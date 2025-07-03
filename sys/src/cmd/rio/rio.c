@@ -108,13 +108,16 @@ Keydef key_map[] = {
   {"C-x", "cut"}, {"C-c", "copy"}, {"C-v", "paste"}, {"C-Q", "exit"},
   {"left", "left"}, {"right", "right"}, {"up", "up"}, {"down", "down"},
   {"C-left", "wordleft"}, {"C-right", "wordright"},
-  {"C-a", "bol"}, {"C-e", "eol"}, {"M-S-<", "bob"}, {"M-S->", "eob"},
-  {"C-f", "find"}, {"C-ret", "plumb"}, {"C-tab", "autosuggest"},
+  {"C-a", "bol"}, {"C-e", "eol"}, {"M-<", "bob"}, {"C-b", "eob"},
+  {"C-f", "find"}, {"C-ret", "plumb"}, {"C-tab", "autosuggest"}, 
   {"backspace", "delcharl"}, {"C-d", "delcharr"},
   {"C-h", "delwordl"}, {"C-D", "delwordr"},
   {"del", "interrupt"},
+  {"pgup", "scrollup"}, {"pgdown", "scrolldown"},
+  {"C-home", "bob"}, {"C-end", "eob"},
   nil
 };
+
 void keymap_load(Keydef key_map[]);
 
 void
@@ -386,16 +389,17 @@ keyboardtap(void*)
 			/* 	shiftdown = utfrune(s+1, Kshift) != nil; */
 			if(*s == 'k' || *s == 'K') {
 			  mod = 0;
+			  shiftdown = utfrune(s+1, Kshift) != nil;
 			  if(utfrune(s+1, Kmod4) != nil)
 				mod |= Mmod4;
 			  if(utfrune(s+1, Kctl) != nil)
 				mod |= Mctl;
 			  if(utfrune(s+1, Kalt) != nil)
 				mod |= Malt;
-			  if(utfrune(s+1, Kshift) != nil) {
-				mod |= Mshift;
-				shiftdown = 1;
-			  }
+			  /* if(utfrune(s+1, Kshift) != nil) { */
+			  /* 	/\* mod |= Mshift; *\/ */
+			  /* 	shiftdown = 1; */
+			  /* } */
 			}
 			if(totap == nil)
 				goto Bypass;
