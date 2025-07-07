@@ -131,10 +131,6 @@ void lineup(Window *w, int n) {
   q0 = w->q0 - org;
   h = w->font->height;
   Point p = frptofchar(w, q0);
-  if (p.y >= w->Frame.r.max.y) {
-	wshow(w, q0);
-	p = frptofchar(w, q0 - w->org);
-  }
   p.y -= n * h;
   if (p.y < w->Frame.r.min.y) {
 	org = wbacknl(w, w->org, n);
@@ -153,17 +149,14 @@ void linedown(Window *w, int n) {
   q0 = w->q0 - org;
   h = w->font->height;
   Point p = frptofchar(w, q0);
-  if (p.y >= w->Frame.r.max.y) {
-	wshow(w, q0);
-	p = frptofchar(w, q0 - w->org);
-  }
   p.y += n * h;
   if (p.y >= w->Frame.r.max.y) {
-	org = wbacknl(w, w->org, n);
+	p.y -= n * h;
+	org = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + w->font->height));
 	wsetorigin(w, org, TRUE);
   }
   q0 = w->org + frcharofpt(w, p);
-  wsetselect(w, q0, q0);
+  wsetselect(w, shiftdown ? w->q0 : q0, q0);
   wshow(w, q0);
 }
 
@@ -263,20 +256,21 @@ void delwordl(Window *w, int i) {
 }
 
 void wordleft(Window *w, int i) {
-  uint q0, q1, skip;
+  uint q0, q1;
 
   q0 = w->q0;
   q1 = w->q1;
-  print("%d %d, ", q0, q1);
+  /* print("%d %d, ", q0, q1); */
   while (i-- > 0 && q0 > 0) {
-	print("i%d %d, ", i, shiftdown);
-	skip = isspace(w->r[q0 - 1]);
-	while(q0 > 0 && (!isspace(w->r[q0 - 1]) || skip)) {
+	/* print("i%d %d, ", i, shiftdown); */
+	while(q0 > 0 && isspace(w->r[q0 - 1])) {
 	  q0--;
-	  skip = 0;
+	}
+	while(q0 > 0 && !isspace(w->r[q0 - 1])) {
+	  q0--;
 	}
   }
-  print("%d %d, ", q0, q1);
+  /* print("%d %d, ", q0, q1); */
   w->q0 = q0;
   w->q1 = q1;
   wsetselect(w, q0, shiftdown ? w->q1 : q0);
@@ -284,20 +278,21 @@ void wordleft(Window *w, int i) {
 }
 
 void wordright(Window *w, int i) {
-  uint q0, q1, skip;
+  uint q0, q1;
 
   q0 = w->q0;
   q1 = w->q1;
-  print("%d %d, ", q0, q1);
+  /* print("%d %d, ", q0, q1); */
   while (i-- > 0) {
-	print("i%d %d, ", i, shiftdown);
-	skip = isspace(w->r[q1]);
-	while(q1 < w->nr && (!isspace(w->r[q1]) || skip)) {
+	/* print("i%d %d, ", i, shiftdown); */
+	while(q1 < w->nr && isspace(w->r[q1])) {
 	  q1++;
-	  skip = 0;
+	}
+	while(q1 < w->nr && !isspace(w->r[q1])) {
+	  q1++;
 	}
   }
-  print("%d %d, ", q0, q1);
+  /* print("%d %d, ", q0, q1); */
   w->q0 = q0;
   w->q1 = q1;
   wsetselect(w, shiftdown ? w->q0 : q1, q1);
