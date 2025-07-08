@@ -148,6 +148,7 @@ struct Window
 	uint			q0;
 	uint			q1;
 	uint			qh;
+	uint			qh1;
 	int			id;
 	char			name[32];
 	uint			namecount;

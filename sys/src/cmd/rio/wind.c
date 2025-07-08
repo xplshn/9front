@@ -833,10 +833,16 @@ wplumb(Window *w)
 	}
 	m->data = runetobyte(w->r+p0, p1-p0, &m->ndata);
 	if(plumbsend(fd, m) < 0){
-		c = lastcursor;
-		riosetcursor(&query);
-		sleep(300);
-		riosetcursor(c);
+		/* c = lastcursor; */
+		/* riosetcursor(&query); */
+		/* sleep(300); */
+		/* riosetcursor(c); */
+
+		Rune s = '\n';
+		winsert(w, &s, 1, p1);
+		w->qh = p0;
+		w->qh1 = p1;
+		wsetselect(w, p0, p1);
 	}
 	plumbfree(m);
 }
@@ -1593,6 +1599,9 @@ winctl(void *arg)
 				alts[WCread].op = CHANSND;
 			else{
 				alts[WCread].op = CHANNOP;
+				if (w->qh < w->qh1)
+				  alts[WCread].op = CHANSND;
+				else
 				for(i=w->qh; i<w->nr; i++){
 					c = w->r[i];
 					if(c=='\n' || c=='\004'){
@@ -1712,7 +1721,8 @@ winctl(void *arg)
 					nr = up - rp;
 					break;
 				}
-			w->qh = winsert(w, rp, nr, w->qh)+nr;
+			winsert(w, rp, nr, w->qh);
+			w->qh = w->nr;
 			if(w->scrolling || w->mouseopen)
 				wshow(w, w->qh);
 			wsetselect(w, w->q0, w->q1);
