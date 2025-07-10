@@ -331,7 +331,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"left", 2, charleft}, {"right", 2, charright}, {"up", 2, lineup}, {"down", 2, linedown},  
   {"wordleft", 2, wordleft}, {"wordright", 2, wordright},
   {"cut", 1, cut}, {"copy", 1, copy}, {"paste", 1, paste},
-  {"find", 1, wlook}, {"plumb", 1, wplumb},
+  {"find", 1, wlook}, {"rfind", 1, wrlook}, {"plumb", 1, wplumb},
   {"delcharl", 2, delcharl}, {"delcharr", 2, delcharr},
   {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
   {"interrupt", 1, interrupt}, {"autosuggest", 1, namecomplete},

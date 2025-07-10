@@ -196,6 +196,7 @@ void		wcut(Window*);
 void		wpaste(Window*);
 void		wplumb(Window*);
 void		wlook(Window*);
+void		wrlook(Window*);
 void		wscrdraw(Window*);
 void		wscroll(Window*, int);
 void		wsend(Window*);

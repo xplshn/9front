@@ -798,6 +798,29 @@ wlook(Window *w)
 }
 
 void
+wrlook(Window *w)
+{
+	int i, n, e;
+
+	i = w->q1;
+	n = i - w->q0;
+	e = w->nr - n;
+	if(n <= 0 || e < n)
+		return;
+
+	i = w->q0 - 1;
+	while(runestrncmp(w->r+w->q0, w->r + i, n) != 0){
+		if(i > 0)
+			i--;
+		else
+			i = e;
+	}
+
+	wsetselect(w, i, i+n);
+	wshow(w, i);
+}
+
+void
 wplumb(Window *w)
 {
 	Plumbmsg *m;
