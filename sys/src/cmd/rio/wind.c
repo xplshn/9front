@@ -601,21 +601,29 @@ showcandidates1(Window *w, Completion *c)
 	uint nr, qline;
 	char *s;
 
+	Window *w;
+	Rectangle r;
+	Point p;
+	w = emalloc(sizeof(Window));
+	/* w->screenr = w1->screenr; */
+	/* r = insetrect(i->r, Selborder+1); */
+	w->i = w1->i;
+	w->font = w1->font;
+	r = insetrect(w->i->r, 100);
+	p = frptofchar(w1, w1->q0);
+
 	runefmtstrinit(&f);
 	if (c->nmatch == 0)
 		s = "[no matches in ";
-	else
-		s = "[";
 	if(c->nfile > 32)
 		fmtprint(&f, "%s%d files]\n", s, c->nfile);
-	else{
-		fmtprint(&f, "%s", s);
-		for(i=0; i<c->nfile; i++){
-			if(i > 0)
-				fmtprint(&f, " ");
-			fmtprint(&f, "%s", c->filename[i]);
-		}
-		fmtprint(&f, "]\n");
+	else {
+	  if (c->nfile < Dy(r) / w->font->height)
+		r.max.y = r.min.y + c->nfile * w->font->height + 2;
+	  fmtprint(&f, "%s", s);
+	  for(i=0; i<c->nfile; i++){
+		fmtprint(&f, "%s\n", c->filename[i]);
+	  }
 	}
 	rp = runefmtstrflush(&f);
 	nr = runestrlen(rp);
@@ -625,12 +633,28 @@ showcandidates1(Window *w, Completion *c)
 	while(qline>0 && w->r[qline-1] != '\n')
 		qline--;
 
+	if ((p.y + Dy(r)) > Dy(w1->i->r)) {
+	  /* Above the line */
+	  p = subpt(p, Pt(r.min.x, r.max.y));
+	  r = rectaddpt(r, p);
+	} else {
+	  /* Below the line */
+	  p = addpt(p, Pt(0, w->font->height));
+	  r = rectaddpt(r, subpt(p, r.min));
+	}
+	/* draw(w->i, r, cols[BACK], nil, frptofchar(w1, w1->q0)); */
+	frinit(w, insetrect(r, 0), w->font, w->i, cols);
+
 	if(qline == w->qh){
 		/* advance host point to avoid readback */
 		w->qh = winsert(w, rp, nr, qline)+nr;
 	} else {
 		winsert(w, rp, nr, qline);
 	}
+	/* print("%d %d,", w->Frame.nlines, w->Frame.maxlines); */
+	int q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + w->font->height));
+	wsetselect(w, 0, q0);
+	border(w->i, r, 1, cols[BORD], ZP);
 	free(rp);
 }
 
