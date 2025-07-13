@@ -121,7 +121,8 @@ void scrolldown(Window *w, int n) {
   int q0, l;
   l = (w->Frame.r.max.y - w->Frame.r.min.y) / w->font->height;
   q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*l*w->font->height));
-  wsetorigin(w, q0, TRUE);
+  if (q0 < w->nr)
+	wsetorigin(w, q0, TRUE);
 }
 
 void lineup(Window *w, int n) {
@@ -146,7 +147,7 @@ void linedown(Window *w, int n) {
   int q0, org, h;
 
   org = w->org;
-  q0 = w->q0 - org;
+  q0 = w->q1 - org;
   h = w->font->height;
   Point p = frptofchar(w, q0);
   p.y += n * h;
