@@ -518,7 +518,82 @@ namecomplete(Window *w)
 }
 
 static void
-showcandidates(Window *w, Completion *c)
+showcandidates(Window *w1, Completion *c)
+{
+    int i, dx, dy;
+	Fmt f;
+	Rune *rp;
+	uint nr, qline;
+	char *s;
+
+	Window *w;
+	Rectangle r;
+	Point p;
+	w = emalloc(sizeof(Window));
+	/* w->screenr = w1->screenr; */
+	/* r = insetrect(i->r, Selborder+1); */
+	w->i = w1->i;
+	w->font = w1->font;
+	r = insetrect(w->i->r, 100);
+	dx = Dx(r);
+	dy = Dy(r);
+	p = frptofchar(w1, w1->q0);
+	/* r.min.y += w->font->height; // Below the line */
+	if ((p.y + dy) > Dy(w1->i->r)) {
+	  p = Pt(r.min.x - p.x, r.max.y - p.y);
+	  r = rectaddpt(r, p);
+	  /* r = rectaddpt(r, addpt(p, r.min)); */
+	} else {
+	  p = addpt(p, Pt(0, w->font->height));
+	  r = rectaddpt(r, subpt(p, r.min));
+	}
+	/* draw(w->i, r, cols[BACK], nil, frptofchar(w1, w1->q0)); */
+	frinit(w, insetrect(r, 1), w->font, w->i, cols);
+	/* wborder(w, Selborder); */
+	/* wscrdraw(w); */
+	/* incref(w);	/\* ref will be removed after mounting; avoids delete before ready to be deleted *\/ */
+
+	runefmtstrinit(&f);
+	if (c->nmatch == 0)
+		s = "[no matches in ";
+	/* else */
+	/* 	s = "["; */
+	if(c->nfile > 32)
+		fmtprint(&f, "%s%d files]\n", s, c->nfile);
+	else{
+		fmtprint(&f, "%s", s);
+		for(i=0; i<c->nfile; i++){
+			/* if(i > 0) */
+			/* 	fmtprint(&f, " "); */
+			fmtprint(&f, "%s\n", c->filename[i]);
+		}
+		/* fmtprint(&f, "]\n"); */
+	}
+	rp = runefmtstrflush(&f);
+	nr = runestrlen(rp);
+
+	/* place text at beginning of line before cursor and host point */
+	qline = min(w->qh, w->q0);
+	while(qline>0 && w->r[qline-1] != '\n')
+		qline--;
+
+	if(qline == w->qh){
+		/* advance host point to avoid readback */
+		w->qh = winsert(w, rp, nr, qline)+nr;
+	} else {
+		winsert(w, rp, nr, qline);
+	}
+	/* print("%d %d,", w->Frame.nlines, w->Frame.maxlines); */
+	int q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + w->font->height));
+	wsetselect(w, 0, q0);
+	if (w->Frame.nlines < Dy(r) / w->font->height)
+	  r.max.y = r.min.y + w->Frame.nlines * w->font->height + 2;
+	border(w->i, r, 1, cols[BORD], ZP);
+	free(rp);
+}
+
+static void
+showcandidates1(Window *w, Completion *c)
 {
 	int i;
 	Fmt f;
