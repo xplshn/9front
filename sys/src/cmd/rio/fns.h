@@ -1,5 +1,10 @@
 int	whide(Window*);
 int	wunhide(Window*);
+int wbswidth(Window *w, Rune c);
+void wsetselect(Window *w, uint q0, uint q1);
+void wdelete(Window *w, uint q0, uint q1);
+uint winsert(Window *w, Rune *r, int n, uint q0);
+
 void	freescrtemps(void);
 int	parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, char*, char*);
 int	writewctl(Xfid*, char*);

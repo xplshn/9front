@@ -604,16 +604,25 @@ showcandidates1(Window *w, Completion *c)
 	Window *w;
 	Rectangle r;
 	Point p;
-	w = emalloc(sizeof(Window));
-	w->i = w1->i;
-	w->font = w1->font;
-	r = insetrect(w->i->r, 100);
+	if (w1->popup == nil) {
+	  w = emalloc(sizeof(Window));
+	  w1->popup = w;
+	  r = insetrect(w1->i->r, 100);
+	  w->font = w1->font;
+	} else {
+	  w = w1->popup;
+	  r = w->i->r;
+	  /* Undo existing artifacts */
+	  border(w->i, r, 1, cols[BACK], ZP);
+	  wdelete(w, 0, w->nr);
+	  flushimage(display, 1);
+	  freeimage(w->i);
+	}
 	p = frptofchar(w1, w1->p0);
 
 	runefmtstrinit(&f);
-	if (c->nmatch == 0)
-		s = "No matches in ";
-	if(c->nfile > 32) {
+	if (c->nmatch == 0) {
+	  s = "No matches in ";
 	  qline = 1;
 	  fmtprint(&f, "%s%d files\n", s, c->nfile);
 	} else {
@@ -642,14 +651,15 @@ showcandidates1(Window *w, Completion *c)
 	  p = addpt(p, Pt(0, w->font->height));
 	  r = rectaddpt(r, subpt(p, r.min));
 	}
+	w->i = allocwindow(wscreen, r, Refnone, DNofill);
 	/* draw(w->i, r, cols[BACK], nil, frptofchar(w1, w1->q0)); */
+	border(w->i, r, 1, cols[BORD], ZP);
 	frinit(w, insetrect(r, 1), w->font, w->i, cols);
 
 	winsert(w, rp, nr, 0);
 	/* Highlight */
 	int q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + w->font->height));
 	wsetselect(w, 0, q0);
-	border(w->i, r, 1, cols[BORD], ZP);
 	free(rp);
 }
 

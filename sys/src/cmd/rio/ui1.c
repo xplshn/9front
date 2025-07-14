@@ -44,11 +44,6 @@ Commentary:
 
 #define NULL ((void*)0)
 
-int wbswidth(Window *w, Rune c);
-void wsetselect(Window *w, uint q0, uint q1);
-void wdelete(Window *w, uint q0, uint q1);
-uint winsert(Window *w, Rune *r, int n, uint q0);
-
 void interruptproc(void *v);
 void namecomplete(Window *w);
 
