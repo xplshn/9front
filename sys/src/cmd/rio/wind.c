@@ -611,12 +611,10 @@ showcandidates1(Window *w, Completion *c)
 	  w->font = w1->font;
 	} else {
 	  w = w1->popup;
-	  r = w->i->r;
+	  r = w->screenr;
 	  /* Undo existing artifacts */
-	  border(w->i, r, 1, cols[BACK], ZP);
 	  wdelete(w, 0, w->nr);
-	  flushimage(display, 1);
-	  freeimage(w->i);
+	  wclosewin(w);
 	}
 	p = frptofchar(w1, w1->p0);
 
@@ -652,6 +650,7 @@ showcandidates1(Window *w, Completion *c)
 	  r = rectaddpt(r, subpt(p, r.min));
 	}
 	w->i = allocwindow(wscreen, r, Refnone, DNofill);
+	w->screenr = r;
 	/* draw(w->i, r, cols[BACK], nil, frptofchar(w1, w1->q0)); */
 	border(w->i, r, 1, cols[BORD], ZP);
 	frinit(w, insetrect(r, 1), w->font, w->i, cols);
@@ -1408,6 +1407,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	w->ck = ck;
 	w->cctl = cctl;
 	w->cursorp = nil;
+	w->popup = nil;
 	w->conswrite = chancreate(sizeof(Conswritemesg), 0);
 	w->consread =  chancreate(sizeof(Consreadmesg), 0);
 	w->kbdread =  chancreate(sizeof(Consreadmesg), 0);
@@ -1435,7 +1435,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	return w;
 }
 
-static void
+void
 wclosewin(Window *w)
 {
 	Image *i = w->i;

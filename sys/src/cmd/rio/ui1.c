@@ -318,6 +318,11 @@ void self_insert(Window *w, Rune s, int n) {
   cut(w);
   q0 = winsert(w, &s, n, q0);
   wshow(w, q0 + 1);
+  if (w->popup) {
+	w = w->popup;
+	wdelete(w, 0, w->nr);
+	wclosewin(w);
+  }
 }
 
 void confirmexit(void);

@@ -153,6 +153,7 @@ struct Window
 	char			name[32];
 	uint			namecount;
 	Rectangle		scrollr;
+	Window		*popup;
 	/*
 	 * Rio once used originwindow, so screenr could be different from i->r.
 	 * Now they're always the same but the code doesn't assume so.
