@@ -96,11 +96,17 @@ void eol(Window *w) {
 }
 
 void bob(Window *w) {
+  if (w->popup && w->popup->i) {
+	w = w->popup;
+  }
   wsetselect(w, 0, shiftdown ? w->q1 : 0);
   wshow(w, w->q0);
 }
 
 void eob(Window *w) {
+  if (w->popup && w->popup->i) {
+	w = w->popup;
+  }
   wsetselect(w, shiftdown ? w->q0 : w->nr, w->nr);
   wshow(w, w->q1);
 }
@@ -123,6 +129,18 @@ void scrolldown(Window *w, int n) {
 void lineup(Window *w, int n) {
   int q0, org, h;
 
+  if (w->popup && w->popup->i) {
+	w = w->popup;
+	if (w->q0 > w->org)
+	  w->q1 = w->q0;
+	else
+	  w->q1 = w->org;
+	shiftdown = 1;
+  } else {
+	/* If we are scrolling page, go to cursor. */
+	wshow(w, w->q0);
+  }
+
   org = w->org;
   q0 = w->q0 - org;
   h = w->font->height;
@@ -140,6 +158,15 @@ void lineup(Window *w, int n) {
 
 void linedown(Window *w, int n) {
   int q0, org, h;
+
+  if (w->popup && w->popup->i) {
+	w = w->popup;
+	w->q0 = w->q1;
+	shiftdown = 1;
+  } else {
+	/* If we are scrolling page, go to cursor. */
+	wshow(w, w->q0);
+  }
 
   org = w->org;
   q0 = w->q1 - org;
@@ -243,6 +270,10 @@ void delcharr(Window *w, int i) {
 	q1 = min(w->q1 + i, w->nr);
 	wdelete(w, q0, q1);
 	wsetselect(w, q0, q0);
+	if (w->popup && w->popup->i) {
+	  wclosepopup(w);
+	  namecomplete(w);
+	}
   }
 }
 
@@ -262,7 +293,7 @@ void wordleft(Window *w, int i) {
 	while(q0 > 0 && isspace(w->r[q0 - 1])) {
 	  q0--;
 	}
-	while(q0 > 0 && !isspace(w->r[q0 - 1])) {
+	while(q0 > 0 && (isalnum(w->r[q0 - 1]) || (w->r[q0 - 1] == '.') || (w->r[q0 - 1] == '_'))) {
 	  q0--;
 	}
   }
@@ -284,7 +315,7 @@ void wordright(Window *w, int i) {
 	while(q1 < w->nr && isspace(w->r[q1])) {
 	  q1++;
 	}
-	while(q1 < w->nr && !isspace(w->r[q1])) {
+	while(q1 < w->nr && (isalnum(w->r[q1]) || (w->r[q1] == '.') || (w->r[q1] == '_'))) {
 	  q1++;
 	}
   }
@@ -321,16 +352,38 @@ void clear(Window *w) {
 }
 
 void self_insert(Window *w, Rune s, int n) {
-  print("insert %c\n", s);
+  /* if (s == '\n') print("insert %c %d\n", s, w->qh); */
   uint q0 = w->q0;
-  cut(w);
-  q0 = winsert(w, &s, n, q0);
-  wshow(w, q0 + 1);
-  if (w->popup) {
-	w = w->popup;
-	wdelete(w, 0, w->nr);
-	wclosewin(w);
+  if (s == '\t' && w->popup && w->popup->i) {
+	Window *p = w->popup;
+	int i1, i2;
+	if (p->q0 < p->nr) {
+	  i2 = w->q0;
+	  wordleft(w, 1);
+	  i1 = w->q0;
+	  wsetselect(w, i1, i2);
+	  cut(w);
+	
+	  i1 = p->q0;
+	  /* eol(p); */
+	  i2 = p->q1 - 1;
+	  wsetselect(p, i1, i2);
+	  cut(p);
+	  paste(w);
+	  q0 = w->q0 - 1;
+	  if (w->r[q0] == '/')
+		s = '/';
+	}
+  } else {
+	/* Replace existing selection */
+	cut(w);
+	q0 = winsert(w, &s, n, q0);
   }
+  wshow(w, q0 + 1);
+  
+  wclosepopup(w);
+  if (!isspace(s))
+	namecomplete(w);
 }
 
 void confirmexit(void);
@@ -481,7 +534,12 @@ void keymap_exec(Window *win, Rune seq) {
   if (found) {
 	cmd = cur_map->cmd;
 	if (cmd != NULL) {
-	  print("cmd %s", cmd->s);
+	  if (!(strcmp(cmd->s, "up") == 0 || strcmp(cmd->s, "down") == 0
+			|| strcmp(cmd->s, "scrollup") == 0 || strcmp(cmd->s, "scrolldown") == 0
+			|| strcmp(cmd->s, "delcharl") == 0
+			|| strcmp(cmd->s, "bob") == 0 || strcmp(cmd->s, "eob") == 0))
+		wclosepopup(win);
+	  /* print("cmd %s", cmd->s); */
 	  switch (cmd->argc) {
 	  case 0:
 		(*cmd->f0)();

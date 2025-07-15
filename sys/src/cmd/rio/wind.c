@@ -592,6 +592,15 @@ showcandidates(Window *w1, Completion *c)
 	free(rp);
 }
 
+void wclosepopup(Window *w) {
+  if (w->popup) {
+	w = w->popup;
+	/* Undo existing artifacts */
+	wdelete(w, 0, w->nr);
+	wclosewin(w);
+  }
+}
+
 static void
 showcandidates1(Window *w, Completion *c)
 {
@@ -612,9 +621,7 @@ showcandidates1(Window *w, Completion *c)
 	} else {
 	  w = w1->popup;
 	  r = w->screenr;
-	  /* Undo existing artifacts */
-	  wdelete(w, 0, w->nr);
-	  wclosewin(w);
+	  wclosepopup(w);
 	}
 	p = frptofchar(w1, w1->p0);
 
@@ -1486,6 +1493,8 @@ wclose(Window *w)
 	if(i < 0)
 		error("negative ref count");
 	wclunk(w);
+	if (w->popup)
+	  wsendctlmesg(w->popup, Exited, ZR, nil);
 	wsendctlmesg(w, Exited, ZR, nil);
 	return 1;
 }
