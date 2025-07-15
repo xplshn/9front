@@ -115,6 +115,7 @@ Keydef key_map[] = {
   {"del", "interrupt"},
   {"pgup", "scrollup"}, {"pgdown", "scrolldown"},
   {"C-home", "bob"}, {"C-end", "eob"},
+  {"M-a", "selectall"}, {"C-l", "clear"},
   nil
 };
 

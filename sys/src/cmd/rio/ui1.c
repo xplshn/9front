@@ -312,6 +312,14 @@ void interrupt(Window *w) {
   proccreate(interruptproc, notefd, 4096);
 }
 
+void selectall(Window *w) {
+  wsetselect(w, 0, w->nr);
+}
+
+void clear(Window *w) {
+  wdelete(w, 0, w->nr);
+}
+
 void self_insert(Window *w, Rune s, int n) {
   print("insert %c\n", s);
   uint q0 = w->q0;
@@ -337,6 +345,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
   {"interrupt", 1, interrupt}, {"autosuggest", 1, namecomplete},
   {"scrollup", 2, scrollup}, {"scrolldown", 2, scrolldown},
+  {"selectall", 1, selectall}, {"clear", 2, clear},
   {"exit", 0, confirmexit},
 };
 
