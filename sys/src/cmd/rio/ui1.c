@@ -462,7 +462,7 @@ void keymap_reset(void) {
 }
 
 void keymap_exec(Window *win, Rune seq) {
-  Command *cmd = NULL;
+  Command *cmd;
   int k = -1, found = 0, modifier = mod;
   print("%x %x ", seq, modifier);
   if (cur_map == NULL) {
