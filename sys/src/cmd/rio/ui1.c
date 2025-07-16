@@ -113,6 +113,9 @@ void eob(Window *w) {
 
 void scrollup(Window *w, int n) {
   int q0, l;
+  if (w->popup && w->popup->i) {
+	w = w->popup;
+  }
   l = (w->Frame.r.max.y - w->Frame.r.min.y) / w->font->height;
   q0 = wbacknl(w, w->org, n * l);
   wsetorigin(w, q0, TRUE);
@@ -120,6 +123,9 @@ void scrollup(Window *w, int n) {
 
 void scrolldown(Window *w, int n) {
   int q0, l;
+  if (w->popup && w->popup->i) {
+	w = w->popup;
+  }
   l = (w->Frame.r.max.y - w->Frame.r.min.y) / w->font->height;
   q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + n*l*w->font->height));
   if (q0 < w->nr)
@@ -184,7 +190,7 @@ void linedown(Window *w, int n) {
 }
 
 void charleft(Window *w, int n) {
-  print("left\n");
+  /* print("left\n"); */
   int q0 = w->q0;
   if(q0 > 0) {
 	q0 = q0 - n;
@@ -195,7 +201,7 @@ void charleft(Window *w, int n) {
 }
 
 void charright(Window *w, int n) {
-  print("right\n");
+  /* print("right\n"); */
   int q1 = w->q1;
   if(q1 < w->nr) {
 	q1 = q1 + n;
@@ -206,18 +212,18 @@ void charright(Window *w, int n) {
 }
 
 void cut(Window *w) {
-  print("cut\n");
+  /* print("cut\n"); */
   wsnarf(w);
   wcut(w);
 }
 
 void copy(Window *w) {
-  print("copy\n");
+  /* print("copy\n"); */
   wsnarf(w);
 }
 
 void paste(Window *w) {
-  print("paste\n");
+  /* print("paste\n"); */
   wpaste(w);
 }
 
@@ -260,6 +266,10 @@ void delcharl(Window *w, int i) {
 	q1 = w->q1;
 	wdelete(w, q0, q1);
 	wsetselect(w, q0, q0);
+	if (w->popup && w->popup->i) {
+	  wclosepopup(w);
+	  namecomplete(w);
+	}
   }
 }
 
@@ -270,10 +280,6 @@ void delcharr(Window *w, int i) {
 	q1 = min(w->q1 + i, w->nr);
 	wdelete(w, q0, q1);
 	wsetselect(w, q0, q0);
-	if (w->popup && w->popup->i) {
-	  wclosepopup(w);
-	  namecomplete(w);
-	}
   }
 }
 
@@ -426,7 +432,7 @@ int keymap_find(Keymap* cur_map, Rune k) {
 void keymap_set_key(Keymap *map, Rune k, char *cmd) {
   int n = map->n, match = 0;
   for (int i = 0; prim[i].s && !match; ++i) {
-	print("%d %s\n", i, prim[i].s);
+	/* print("%d %s\n", i, prim[i].s); */
 	if (strcmp(prim[i].s, cmd) == 0) {
 	  Keymap  *cmap = emalloc(sizeof(Keymap));
 	  Command *c = emalloc(sizeof(Command));
@@ -464,7 +470,7 @@ void keymap_reset(void) {
 void keymap_exec(Window *win, Rune seq) {
   Command *cmd;
   int k = -1, found = 0, modifier = mod;
-  print("%x %x ", seq, modifier);
+  /* print("%x %x ", seq, modifier); */
   if (cur_map == NULL) {
 	cur_map = global_map;
 	found = 1;
@@ -556,11 +562,10 @@ void keymap_exec(Window *win, Rune seq) {
 	  // No binding
 	}
   } else {
-	print("insert ");
+	/* print("insert "); */
 	self_insert(win, seq, prefix ? prefix : 1);
 	keymap_reset();
   }
-  
 }
 
 Keymap* keymap_new(int n) {
@@ -613,10 +618,11 @@ void keymap_load(Keydef key_map[]) {
 
   for(int i=0; key_map[i].k; i++) {
 	cur_map = NULL;
+	r = 0;
 	prev_map = global_map;
-	print("\n load %d, ", i); 
+	/* print("\n load %d, ", i);  */
 	for(int j=0; key_map[i].k[j]; j++) {
-	  print("load1 %d, ", j); 
+	  /* print("load1 %d, ", j);  */
 	  char k = key_map[i].k[j];
 	  char *k1 = key_map[i].k + j;
 	  r = k;
@@ -625,10 +631,10 @@ void keymap_load(Keydef key_map[]) {
 		continue;
 
 	  for (int m = 0; m < nelem(keys_mapped); m++) {
-		print("%s %x %x ", keys_mapped[m].s, keys_mapped[m].r, j);
+		/* print("%s %x %x ", keys_mapped[m].s, keys_mapped[m].r, j); */
 		int l = strlen(keys_mapped[m].s);
 		if (strncmp(k1, keys_mapped[m].s, l) == 0) {
-		  print("matched %x %x ", l, m);
+		  /* print("matched %x %x ", l, m); */
 		  r = keys_mapped[m].r;
 		  j += l - 1;
 		  break;
@@ -646,14 +652,14 @@ void keymap_load(Keydef key_map[]) {
 	  } else {
 		cur_map = prev_map->val[n];
 		if (cur_map->n >= cur_map->len) {
-		  print("grow %d >= %d ", cur_map->n, cur_map->len);
+		  /* print("grow %d >= %d ", cur_map->n, cur_map->len); */
 		  cur_map = keymap_grow(cur_map);
 		  prev_map->val[n] = cur_map;
 		}
 	  }
 	  prev_map = cur_map;
 	}
-	print("Map %x to %s\n", r, key_map[i].cmd);
+	/* print("Map %x to %s\n", r, key_map[i].cmd); */
 	keymap_set_key(cur_map, r, key_map[i].cmd);
   }
   cur_map = NULL;

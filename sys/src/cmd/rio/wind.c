@@ -533,7 +533,6 @@ showcandidates(Window *w1, Completion *c)
 	Fmt f;
 	Rune *rp;
 	uint nr, qline;
-	char *s;
 
 	Window *w;
 	Rectangle r;
@@ -549,16 +548,13 @@ showcandidates(Window *w1, Completion *c)
 	  wclosepopup(w);
 	}
 	p = frptofchar(w1, w1->p0);
-	s = nil;
 
 	runefmtstrinit(&f);
 	if (c->nmatch == 0) {
-	  s = "No matches in ";
 	  qline = 1;
-	  fmtprint(&f, "%s%d files\n", s, c->nfile);
+	  fmtprint(&f, "No matches in %d files\n", c->nfile);
 	} else {
 	  qline = min(c->nfile, 5);
-	  fmtprint(&f, "%s", s);
 	  for(i=0; i<c->nfile; i++){
 		fmtprint(&f, "%s\n", c->filename[i]);
 	  }
@@ -570,8 +566,8 @@ showcandidates(Window *w1, Completion *c)
 	dx = Dx(r);
 	if ((p.x + dx) > w1->i->r.max.x) {
 	  /* Keep inside window */
-	  p.x = r.min.x = w1->i->r.min.x + (Dx(w1->i->r) - dx);
-	  r.max.x = r.min.x + dx - 2 * Selborder;
+	  p.x = r.min.x = w1->i->r.min.x + (Dx(w1->i->r) - dx) - 2 * Selborder;
+	  r.max.x = r.min.x + dx;
 	}
 	if ((p.y + Dy(r) + w->font->height) > w1->i->r.max.y) {
 	  /* Above the line */
@@ -1880,9 +1876,10 @@ winctl(void *arg)
 			continue;
 		case WComplete:
 			if(w->i!=nil){
-				if(!cr->advance)
+				/* if(!cr->advance) */
 					showcandidates(w, cr);
-				if(cr->advance){
+				if (0) {
+				/* if(cr->advance){ */
 					rp = runesmprint("%s", cr->string);
 					if(rp){
 						nr = runestrlen(rp);

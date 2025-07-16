@@ -5,6 +5,7 @@ void wsetselect(Window *w, uint q0, uint q1);
 void wdelete(Window *w, uint q0, uint q1);
 uint winsert(Window *w, Rune *r, int n, uint q0);
 void wclosewin(Window *w);
+void wclosepopup(Window *w);
 
 void	freescrtemps(void);
 int	parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, char*, char*);
