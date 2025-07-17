@@ -9,7 +9,7 @@
 #include <frame.h>
 #include <fcall.h>
 #include <plumb.h>
-#include <complete.h>
+/* #include <complete.h> */
 #include "dat.h"
 #include "fns.h"
 
@@ -347,6 +347,44 @@ wsetname(Window *w)
 	fprint(2, "rio: setname failed: %s\n", err);
 }
 
+static Rectangle wtagresize(Window *w, Image *i) {
+  Window *w1;
+  Rectangle r, r1;
+  Fmt f;
+  Rune *rp;
+  uint nr, n;
+  char sfmt[24];
+
+  w1 = w->title;
+  r1 = insetrect(i->r, Selborder);
+  r1.max.y = r1.min.y + font->height + 2 * Selborder;
+  r = insetrect(i->r, Selborder+1);
+  r.min.y = r1.max.y;
+  w1->i = allocwindow(wscreen, r1, Refnone, DNofill);
+  w1->screenr = r1;
+  draw(w1->i, r1, tagcols[BACK], nil, ZP);
+  border(w1->i, r1, 1, tagcols[BORD], ZP);
+  frinit(w1, insetrect(r1, Selborder), w->font, w1->i, tagcols);
+  runefmtstrinit(&f);
+  fmtprint(&f, "%s", w->dir);
+  /* w->modified = 1; */
+  /* w->file = "file.txt"; */
+  if (w->file)
+	fmtprint(&f, "/%s%s", w->file, w->modified ? " *" : "");
+
+  sprint(sfmt, "%s@%s", "glenda", "localhost");
+  n = stringwidth(w->font, sfmt);
+  string(w1->i, Pt(r1.max.x - n - Selborder, r1.min.y + Selborder),
+		 tagcols[TEXT], ZP, w->font, sfmt);
+
+  rp = runefmtstrflush(&f);
+  nr = runestrlen(rp);
+  winsert(w1, rp, nr, 0);
+
+  free(rp);
+  return r;
+}
+
 static void
 wresize(Window *w, Image *i)
 {
@@ -354,7 +392,10 @@ wresize(Window *w, Image *i)
 
 	w->i = i;
 	w->mc.image = i;
-	r = insetrect(i->r, Selborder+1);
+	if (w->enable_title)
+	  r = wtagresize(w, i);
+	else
+	  r = insetrect(i->r, Selborder+1);
 	w->scrollr = r;
 	w->scrollr.max.x = r.min.x+Scrollwid;
 	w->lastsr = ZR;
@@ -1372,13 +1413,22 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 
 	w = emalloc(sizeof(Window));
 	w->screenr = i->r;
-	r = insetrect(i->r, Selborder+1);
+	w->font = font;
 	w->i = i;
 	w->mc = *mc;
 	w->ck = ck;
 	w->cctl = cctl;
 	w->cursorp = nil;
-	w->popup = nil;
+	w->popup = nil;//emalloc(sizeof(Window));
+	w->title = emalloc(sizeof(Window));
+	w->dir = estrdup(startdir);
+	w->label = estrdup("<unnamed>");
+	w->file = nil;
+	w->enable_title = 1;
+	if (w->enable_title)
+	  r = wtagresize(w, i);
+	else
+	  r = insetrect(i->r, Selborder+1);
 	w->conswrite = chancreate(sizeof(Conswritemesg), 0);
 	w->consread =  chancreate(sizeof(Consreadmesg), 0);
 	w->kbdread =  chancreate(sizeof(Consreadmesg), 0);
@@ -1396,8 +1446,6 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	w->id = ++id;
 	w->notefd = -1;
 	w->scrolling = scrolling;
-	w->dir = estrdup(startdir);
-	w->label = estrdup("<unnamed>");
 	r = insetrect(w->i->r, Selborder);
 	draw(w->i, r, cols[BACK], nil, w->entire.min);
 	wborder(w, Selborder);
@@ -1457,8 +1505,8 @@ wclose(Window *w)
 	if(i < 0)
 		error("negative ref count");
 	wclunk(w);
-	if (w->popup)
-	  wsendctlmesg(w->popup, Exited, ZR, nil);
+	wsendctlmesg(w->popup, Exited, ZR, nil);
+	wsendctlmesg(w->title, Exited, ZR, nil);
 	wsendctlmesg(w, Exited, ZR, nil);
 	return 1;
 }
@@ -1478,6 +1526,7 @@ static int
 wctlmesg(Window *w, int m, Rectangle r, void *p)
 {
 	Image *i = p;
+	Window *w1;
 
 	switch(m){
 	default:
@@ -1560,6 +1609,16 @@ wctlmesg(Window *w, int m, Rectangle r, void *p)
 		flushimage(display, 1);
 		break;
 	case Exited:
+	  w1 = w->popup;
+	  wclosewin(w1);
+	  frclear(w1, TRUE);
+	  free(w1);
+
+	  w1 = w->title;
+	  wclosewin(w1);
+	  frclear(w1, TRUE);
+	  free(w1);
+
 		wclosewin(w);
 		frclear(w, TRUE);
 		flushimage(display, 1);
@@ -1577,6 +1636,7 @@ wctlmesg(Window *w, int m, Rectangle r, void *p)
 		chanfree(w->gone);
 		free(w->raw);
 		free(w->r);
+		free(w->file);
 		free(w->dir);
 		free(w->label);
 		free(w);

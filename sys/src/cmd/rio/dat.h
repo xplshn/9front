@@ -1,3 +1,5 @@
+#include <complete.h>
+
 enum
 {
 	Qdir,			/* /dev for this window */
@@ -149,11 +151,15 @@ struct Window
 	uint			q1;
 	uint			qh;
 	uint			qh1;
+	uint			line, col;
 	int			id;
 	char			name[32];
 	uint			namecount;
 	Rectangle		scrollr;
-	Window		*popup;
+	Window		    *popup;
+	Window		    *title;
+	int		    enable_title;
+	Completion      *c;
 	/*
 	 * Rio once used originwindow, so screenr could be different from i->r.
 	 * Now they're always the same but the code doesn't assume so.
@@ -178,6 +184,8 @@ struct Window
 	uchar		winnameread;
 	char			*label;
 	char			*dir;
+	char			*file;
+	int			modified; /* If loaded file is modified */
 };
 
 void		winctl(void*);
@@ -301,6 +309,7 @@ Cursor	*corners[9];
 Cursor	skull;
 
 Image	*background;
+Image	*tagcols[NCOL];
 Image	*cols[NCOL];
 Image	*titlecol;
 Image	*lighttitlecol;

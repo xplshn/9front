@@ -6,6 +6,52 @@ void wdelete(Window *w, uint q0, uint q1);
 uint winsert(Window *w, Rune *r, int n, uint q0);
 void wclosewin(Window *w);
 void wclosepopup(Window *w);
+void		winctl(void*);
+void		winshell(void*);
+Window*	wlookid(int);
+Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
+Window*	wpointto(Point);
+Window*	wtop(Point);
+void		wtopme(Window*);
+void		wbottomme(Window*);
+char*	wcontents(Window*, int*);
+int		wclose(Window*);
+uint		wbacknl(Window*, uint, uint);
+void		wcurrent(Window*);
+void		wuncurrent(Window*);
+void		wcut(Window*);
+void		wpaste(Window*);
+void		wplumb(Window*);
+void		wlook(Window*);
+void		wrlook(Window*);
+void		wscrdraw(Window*);
+void		wscroll(Window*, int);
+void		wsend(Window*);
+void		wsendctlmesg(Window*, int, Rectangle, void*);
+void		wsetcursor(Window*, int);
+void		wsetname(Window*);
+void		wsetorigin(Window*, uint, int);
+void		wsetpid(Window*, int, int);
+void		wshow(Window*, uint);
+void		wsnarf(Window*);
+void 		wscrsleep(Window*, uint);
+
+Channel*	xfidinit(void);
+void		xfidctl(void*);
+void		xfidflush(Xfid*);
+void		xfidattach(Xfid*);
+void		xfidopen(Xfid*);
+void		xfidclose(Xfid*);
+void		xfidread(Xfid*);
+void		xfidwrite(Xfid*);
+
+Filsys*	filsysinit(Channel*);
+int		filsysmount(Filsys*, int);
+Xfid*		filsysrespond(Filsys*, Xfid*, Fcall*, char*);
+void		filsyscancel(Xfid*);
+
+void		deletetimeoutproc(void*);
+
 
 void	freescrtemps(void);
 int	parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, char*, char*);
