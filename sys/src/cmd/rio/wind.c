@@ -372,7 +372,7 @@ static Rectangle wtagresize(Window *w, Image *i) {
   if (w->file)
 	fmtprint(&f, "/%s%s", w->file, w->modified ? " *" : "");
 
-  sprint(sfmt, "%s@%s", "glenda", "localhost");
+  sprint(sfmt, "%s@%s", getenv("user"), getenv("sysname"));
   n = stringwidth(w->font, sfmt);
   string(w1->i, Pt(r1.max.x - n - Selborder, r1.min.y + Selborder),
 		 tagcols[TEXT], ZP, w->font, sfmt);
@@ -480,6 +480,7 @@ struct Completejob
 	char	*dir;
 	char	*str;
 	Window	*win;
+	int 	force;
 };
 
 static void
@@ -492,8 +493,11 @@ completeproc(void *arg)
 	threadsetname("namecomplete %s", job->dir);
 
 	c = complete(job->dir, job->str);
-	if(c != nil && sendp(job->win->complete, c) <= 0)
+	if(c != nil) {
+	  c->force = job->force;
+	  if (sendp(job->win->complete, c) <= 0)
 		freecompletion(c);
+	}
 
 	wclose(job->win);
 
@@ -521,7 +525,7 @@ windfilewidth(Window *w, uint q0, int oneelement)
 }
 
 void
-namecomplete(Window *w)
+namecomplete(Window *w, int force)
 {
 	int nstr, npath;
 	Rune *path, *str;
@@ -554,6 +558,7 @@ namecomplete(Window *w)
 	job->str = runetobyte(str, nstr, &nstr);
 	job->dir = cleanname(dir);
 	job->win = w;
+	job->force = force;
 	incref(w);
 	proccreate(completeproc, job, STACK);
 }
@@ -578,6 +583,9 @@ showcandidates(Window *w1, Completion *c)
 	Window *w;
 	Rectangle r;
 	Point p;
+	if (c->nmatch == 0 && !c->force)
+	  return;
+
 	if (w1->popup == nil) {
 	  w = emalloc(sizeof(Window));
 	  w1->popup = w;
@@ -1112,7 +1120,7 @@ wkeyctl1(Window *w, Rune r)
 		return;
 	case Kack:	/* ^F: file name completion */
 	case Kins:	/* Insert: file name completion */
-		namecomplete(w);
+		namecomplete(w, 0);
 		return;
 	case Kbs:	/* ^H: erase character */
 	case Knack:	/* ^U: erase line */

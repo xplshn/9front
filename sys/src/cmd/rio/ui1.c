@@ -44,11 +44,7 @@ Commentary:
 
 #define NULL ((void*)0)
 
-void interruptproc(void *v);
-void namecomplete(Window *w);
-
 typedef int bool;
-/* #define NULL ((void*)0) */
 
 typedef struct {
   const char *s;
@@ -268,7 +264,7 @@ void delcharl(Window *w, int i) {
 	wsetselect(w, q0, q0);
 	if (w->popup && w->popup->i) {
 	  wclosepopup(w);
-	  namecomplete(w);
+	  namecomplete(w, 0);
 	}
   }
 }
@@ -389,7 +385,7 @@ void self_insert(Window *w, Rune s, int n) {
   
   wclosepopup(w);
   if (!isspace(s))
-	namecomplete(w);
+	namecomplete(w, 0);
 }
 
 void confirmexit(void);
@@ -402,7 +398,7 @@ struct { const char *s; int argc; void (*f); } prim[] = {
   {"find", 1, wlook}, {"rfind", 1, wrlook}, {"plumb", 1, wplumb},
   {"delcharl", 2, delcharl}, {"delcharr", 2, delcharr},
   {"delwordl", 2, delwordl}, {"delwordr", 2, delwordr},
-  {"interrupt", 1, interrupt}, {"autosuggest", 1, namecomplete},
+  {"interrupt", 1, interrupt}, {"autosuggest", 2, namecomplete},
   {"scrollup", 2, scrollup}, {"scrolldown", 2, scrolldown},
   {"selectall", 1, selectall}, {"clear", 2, clear},
   {"exit", 0, confirmexit},
@@ -663,7 +659,7 @@ void keymap_load(Keydef key_map[]) {
 	keymap_set_key(cur_map, r, key_map[i].cmd);
   }
   cur_map = NULL;
-  print("loaded");
+  /* print("loaded"); */
   /* exits("loaded"); */
 }
  

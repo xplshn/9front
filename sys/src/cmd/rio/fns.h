@@ -36,6 +36,9 @@ void		wshow(Window*, uint);
 void		wsnarf(Window*);
 void 		wscrsleep(Window*, uint);
 
+void 		interruptproc(void*);
+void 		namecomplete(Window*, int);
+
 Channel*	xfidinit(void);
 void		xfidctl(void*);
 void		xfidflush(Xfid*);
