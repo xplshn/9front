@@ -35,6 +35,7 @@ void		wsetpid(Window*, int, int);
 void		wshow(Window*, uint);
 void		wsnarf(Window*);
 void 		wscrsleep(Window*, uint);
+void 		wtagrepaint(Window*);
 
 void 		interruptproc(void*);
 void 		namecomplete(Window*, int);

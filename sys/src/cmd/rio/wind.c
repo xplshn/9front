@@ -347,15 +347,48 @@ wsetname(Window *w)
 	fprint(2, "rio: setname failed: %s\n", err);
 }
 
-static Rectangle wtagresize(Window *w, Image *i) {
+void wtagrepaint(Window *w) {
   Window *w1;
-  Rectangle r, r1;
+  Rectangle r1;
   Fmt f;
   Rune *rp;
   uint nr, n;
   char sfmt[24];
 
+  if (!w->title)
+	return;
   w1 = w->title;
+  r1 = w1->screenr;
+  runefmtstrinit(&f);
+  fmtprint(&f, "< %s ", w->dir);
+  /* w->modified = 1; */
+  /* w->file = "file.txt"; */
+  if (w->file)
+	fmtprint(&f, "/%s%s", w->file, w->modified ? "*" : "");
+
+  sprint(sfmt, "%s@%s", getenv("user"), getenv("sysname"));
+  n = stringwidth(w->font, sfmt);
+  string(w1->i, Pt(r1.max.x - n - Selborder, r1.min.y + Selborder),
+		 tagcols[TEXT], ZP, w->font, sfmt);
+
+  rp = runefmtstrflush(&f);
+  nr = runestrlen(rp);
+  /* wsetselect(w1, 0, w1->nr); */
+  wdelete(w1, 0, w1->nr);
+  winsert(w1, rp, nr, 0);
+  free(rp);
+}
+
+static Rectangle wtagresize(Window *w, Image *i) {
+  Window *w1;
+  Rectangle r, r1;
+
+  if (w->title)
+	w1 = w->title;
+  else {
+	w1 = emalloc(sizeof(Window));
+	w->title = w1;
+  }
   r1 = insetrect(i->r, Selborder);
   r1.max.y = r1.min.y + font->height + 2 * Selborder;
   r = insetrect(i->r, Selborder+1);
@@ -365,23 +398,8 @@ static Rectangle wtagresize(Window *w, Image *i) {
   draw(w1->i, r1, tagcols[BACK], nil, ZP);
   border(w1->i, r1, 1, tagcols[BORD], ZP);
   frinit(w1, insetrect(r1, Selborder), w->font, w1->i, tagcols);
-  runefmtstrinit(&f);
-  fmtprint(&f, "%s", w->dir);
-  /* w->modified = 1; */
-  /* w->file = "file.txt"; */
-  if (w->file)
-	fmtprint(&f, "/%s%s", w->file, w->modified ? " *" : "");
+  wtagrepaint(w);
 
-  sprint(sfmt, "%s@%s", getenv("user"), getenv("sysname"));
-  n = stringwidth(w->font, sfmt);
-  string(w1->i, Pt(r1.max.x - n - Selborder, r1.min.y + Selborder),
-		 tagcols[TEXT], ZP, w->font, sfmt);
-
-  rp = runefmtstrflush(&f);
-  nr = runestrlen(rp);
-  winsert(w1, rp, nr, 0);
-
-  free(rp);
   return r;
 }
 
@@ -570,6 +588,15 @@ void wclosepopup(Window *w) {
 	wdelete(w, 0, w->nr);
 	wclosewin(w);
   }
+}
+
+static Window* mkpopup(Window *w1) {
+  Window *w;
+  w = emalloc(sizeof(Window));
+  w1->popup = w;
+  w->screenr = insetrect(w1->i->r, 100);
+  w->font = w1->font;
+  return w;
 }
 
 static void
@@ -1427,8 +1454,8 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	w->ck = ck;
 	w->cctl = cctl;
 	w->cursorp = nil;
-	w->popup = nil;//emalloc(sizeof(Window));
-	w->title = emalloc(sizeof(Window));
+	w->popup = nil; //mkpopup(w);
+	w->title = nil;//emalloc(sizeof(Window));
 	w->dir = estrdup(startdir);
 	w->label = estrdup("<unnamed>");
 	w->file = nil;
