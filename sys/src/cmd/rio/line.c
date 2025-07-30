@@ -21,18 +21,6 @@ void swap(int* a , int* b)
     *b = temp;
 }
 
-// returns fractional part of a number
-float fpart(float x)
-{
-    return x - floor(x);
-}
-
-// returns 1 - fractional part of number
-float rfpart(float x)
-{
-    return 1 - fpart(x);
-}
-
 // draws a pixel on screen of given brightness 0 <= brightness <= 1.
 void drawPixel(Image *dst, int x, int y, float brightness, Image *src)
 {
@@ -70,23 +58,28 @@ void drawAALine(Image *dst, int x0, int y0, int x1, int y1, Image *src)
     int xpxl1 = x0;
     int xpxl2 = x1;
     float intery = y0;
+	float fpart, rfpart;
 
-    // main loop
     if (steep)
     {
         for (int x = xpxl1; x <= xpxl2; x++) {
-            drawPixel(dst	, floor(intery)	  ,  x, rfpart(intery), src);
-            drawPixel(dst	, floor(intery) + 1, x, fpart(intery) , src);
-            intery += gradient;
+		  y0 = floor(intery);
+		  fpart = intery - y0;
+		  rfpart = 1 - fpart;
+		  drawPixel(dst	,  y0    , x, rfpart, src);
+		  drawPixel(dst	,  y0 + 1, x, fpart , src);
+		  intery += gradient;
         }
     }
     else
     {
-        for (int x = xpxl1; x <= xpxl2; x++)
-        {
-            drawPixel(dst	, x	, floor(intery)    , rfpart(intery), src);
-            drawPixel(dst	, x	, floor(intery) + 1, fpart(intery) , src);
-            intery += gradient;
+        for (int x = xpxl1; x <= xpxl2; x++) {
+		  y0 = floor(intery);
+		  fpart = intery - y0;
+		  rfpart = 1 - fpart;
+		  drawPixel(dst	, x	, y0    , rfpart, src);
+		  drawPixel(dst	, x	, y0 + 1, fpart , src);
+		  intery += gradient;
         }
     }
 }
