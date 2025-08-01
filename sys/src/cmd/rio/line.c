@@ -13,6 +13,16 @@ Xiaolin Wu's line algorithm https://en.wikipedia.org/wiki/Xiaolin_Wu%27s_line_al
 #include <fcall.h>
 #include "dat.h"
 
+#define max(a, b) a > b ? a : b
+
+typedef struct Param	Param;
+struct Param {
+	Image	*dst;
+	Image	*src;
+	int     t;
+	Point   sp;
+};
+
 // swaps two numbers
 void swap(int* a , int* b)
 {
@@ -22,15 +32,20 @@ void swap(int* a , int* b)
 }
 
 // draws a pixel on screen of given brightness 0 <= brightness <= 1.
-void drawPixel(Image *dst, int x, int y, float brightness, Image *src)
+void drawPixel(int x, int y, float brightness, Param p)
 {
-    int c = 255 * brightness;
-	Image *c1 = allocimage(display, Rect(0,0,1,1), GREY8, 1, setalpha(DOpaque, c));
+	int c, t;
+	Image *dst, *src;
+	src = p.src;
+	dst = p.dst;
+	t   = p.t;
+	c   = 255 * brightness;
+	Image *c1 = allocimage(display, Rect(0,0,t,t), GREY8, 1, setalpha(DOpaque, c));
 	draw(dst, Rect(x, y, x+1, y+1), src, c1, ZP);
 	freeimage(c1);
 }
 
-void drawAALine(Image *dst, int x0, int y0, int x1, int y1, Image *src)
+void _line(int x0, int y0, int x1, int y1, Param p)
 {
     int steep = fabs(y1 - y0) > fabs(x1 - x0);
 
@@ -66,8 +81,8 @@ void drawAALine(Image *dst, int x0, int y0, int x1, int y1, Image *src)
 		  y0 = floor(intery);
 		  fpart = intery - y0;
 		  rfpart = 1 - fpart;
-		  drawPixel(dst	,  y0    , x, rfpart, src);
-		  drawPixel(dst	,  y0 + 1, x, fpart , src);
+		  drawPixel(y0    , x, rfpart, p);
+		  drawPixel(y0 + 1, x, fpart , p);
 		  intery += gradient;
         }
     }
@@ -77,9 +92,126 @@ void drawAALine(Image *dst, int x0, int y0, int x1, int y1, Image *src)
 		  y0 = floor(intery);
 		  fpart = intery - y0;
 		  rfpart = 1 - fpart;
-		  drawPixel(dst	, x	, y0    , rfpart, src);
-		  drawPixel(dst	, x	, y0 + 1, fpart , src);
+		  drawPixel(x	, y0    , rfpart, p);
+		  drawPixel(x	, y0 + 1, fpart , p);
 		  intery += gradient;
         }
     }
 }
+
+void drawQuadCircle(int x0, int y0, int x, int y, float fpart, Param p)
+{
+	float rfpart = 1 - fpart;
+	drawPixel( x0 + x , y0 + y    , fpart , p);
+	drawPixel( x0 + x , y0 + y - 1, rfpart, p);
+	drawPixel( x0 + y , y0 + x    , fpart , p);
+	drawPixel( x0 + y - 1, y0 + x , rfpart, p);
+}
+
+void drawQuadEllipse(int x0, int y0, int x, int y, float fpart, Param p)
+{
+	float rfpart = 1 - fpart;
+	drawPixel( x0 + x , y0 + y    , fpart , p);
+	drawPixel( x0 + x , y0 + y - 1, rfpart, p);
+}
+
+void _circle(int x0, int y0, int a, Param p)
+{
+	int i, j;
+	float intery, d;
+	float fpart, rfpart;
+
+	i = d = 0;
+	j = a;
+	while (i < j) {
+	  intery = sqrt(max(a * a - i * i, 0));
+	  fpart  = ceil(intery) - intery;
+	  rfpart = 1 - fpart;
+	  if (fpart < d)
+		j--;
+	  d = fpart;
+
+	  drawQuadCircle(x0, y0,  i,  j, fpart , p);
+	  drawQuadCircle(x0, y0,  i, -j, rfpart, p);
+	  drawQuadCircle(x0, y0, -i,  j, fpart , p);
+	  drawQuadCircle(x0, y0, -i, -j, rfpart, p);
+
+	  i++;
+	}
+}
+
+void _ellipse(int x0, int y0, int a, int b, Param p)
+{
+    if (a == b) {
+      _circle(x0, y0, a, p);
+      return;
+    }
+
+	int i, j;
+	float intery;
+	float fpart, rfpart;
+
+	i = 0;
+	j = b;
+	while (i <= a) {
+	  intery = b * sqrt(max(1 - (i * i * 1.0) / (a * a), 0));
+	  fpart  = ceil(intery) - intery;
+	  rfpart = 1 - fpart;
+	  if (j - intery > 2) {
+		_line(x0 + (i - 1), y0 + j, x0 + i, y0 + ceil(intery), p);
+		_line(x0 + (i - 1), y0 - j, x0 + i, y0 - ceil(intery), p);
+		_line(x0 - (i - 1), y0 + j, x0 - i, y0 + ceil(intery), p);
+		_line(x0 - (i - 1), y0 - j, x0 - i, y0 - ceil(intery), p);
+		/* printf("draw %d %d %d %d\n", i-1, j, i, (int)ceil(intery)); */
+	  }
+	  j = ceil(intery);
+	  /* printf("%d %d %f %f\n", i, j, intery, fpart - d); */
+
+	  drawQuadEllipse(x0, y0,  i,  j, fpart , p);
+	  drawQuadEllipse(x0, y0,  i, -j, rfpart, p);
+	  drawQuadEllipse(x0, y0, -i,  j, fpart , p);
+	  drawQuadEllipse(x0, y0, -i, -j, rfpart, p);
+
+	  i++;
+	}
+}
+
+void line(Image *dst, Point p0, Point p1, int end0, int end1, int radius,
+		  Image *src, Point sp)
+{
+  Param p;
+  p.src = src;
+  p.dst = dst;
+  p.sp  = sp;
+  p.t   = radius;
+  _line(p0.x, p0.y, p1.x, p1.y, p);
+}
+
+void ellipse(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp)
+{
+  Param p;
+  p.src = src;
+  p.dst = dst;
+  p.sp  = sp;
+  p.t   = thick;
+  _ellipse(c.x, c.y, a, b, p);
+}
+
+void circle(Image *dst, Point c, int a, int thick, Image *src, Point sp)
+{
+  Param p;
+  p.src = src;
+  p.dst = dst;
+  p.sp  = sp;
+  p.t   = thick;
+  _circle(c.x, c.y, a, p);
+}
+
+/* void arc(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, */
+/* 		 int alpha, int phi) */
+/* { */
+/*   Param p; */
+/*   p.src = src; */
+/*   p.dst = dst; */
+/*   _line(x0, y0, x1, y1, p); */
+/* }   */
