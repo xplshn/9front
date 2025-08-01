@@ -40,8 +40,8 @@ void drawPixel(int x, int y, float brightness, Param p)
 	dst = p.dst;
 	t   = p.t;
 	c   = 255 * brightness;
-	Image *c1 = allocimage(display, Rect(0,0,t,t), GREY8, 1, setalpha(DOpaque, c));
-	draw(dst, Rect(x, y, x+1, y+1), src, c1, ZP);
+	Image *c1 = allocimage(display, Rect(0,0,1,1), GREY8, 1, setalpha(DOpaque, c));
+	draw(dst, Rect(x, y, x+t, y+t), src, c1, ZP);
 	freeimage(c1);
 }
 
@@ -103,16 +103,16 @@ void drawQuadCircle(int x0, int y0, int x, int y, float fpart, Param p)
 {
 	float rfpart = 1 - fpart;
 	drawPixel( x0 + x , y0 + y    , fpart , p);
-	drawPixel( x0 + x , y0 + y - 1, rfpart, p);
+	drawPixel( x0 + x , y0 + y + 1, rfpart, p);
 	drawPixel( x0 + y , y0 + x    , fpart , p);
-	drawPixel( x0 + y - 1, y0 + x , rfpart, p);
+	drawPixel( x0 + y + 1, y0 + x , rfpart, p);
 }
 
 void drawQuadEllipse(int x0, int y0, int x, int y, float fpart, Param p)
 {
 	float rfpart = 1 - fpart;
 	drawPixel( x0 + x , y0 + y    , fpart , p);
-	drawPixel( x0 + x , y0 + y - 1, rfpart, p);
+	drawPixel( x0 + x , y0 + y + 1, rfpart, p);
 }
 
 void _circle(int x0, int y0, int a, Param p)
