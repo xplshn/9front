@@ -36,12 +36,21 @@ void drawPixel(int x, int y, float brightness, Param p)
 {
 	int c, t;
 	Image *dst, *src;
+	Point sp;
+	float th;
+
 	src = p.src;
 	dst = p.dst;
 	t   = p.t;
+	sp  = p.sp;
 	c   = 255 * brightness;
-	Image *c1 = allocimage(display, Rect(0,0,1,1), GREY8, 1, setalpha(DOpaque, c));
-	draw(dst, Rect(x, y, x+t, y+t), src, c1, ZP);
+	Image *c1 = allocimage(display, Rect(0,0,t,t), GREY8, 1, setalpha(DOpaque, c));
+	if (t > 1) {
+	  th  = t/2.0;
+	  sp  = subpt(sp, Pt(th, th));
+	  draw(dst, Rect(x-(th), y-(th), x+ceil(th), y+ceil(th)), src, c1, sp);
+	} else
+	  draw(dst, Rect(x, y, x+t, y+t), src, c1, sp);
 	freeimage(c1);
 }
 
