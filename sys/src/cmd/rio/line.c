@@ -185,6 +185,44 @@ void _ellipse(int x0, int y0, int a, int b, Param p)
 	}
 }
 
+void _bezier(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Param p)
+{
+    int i, j, x, y;
+    float d1, d2, d3, d4, d5, d;
+	float fpart, rfpart;
+
+    float dx = x2 - x0;
+    float step = (dx == 0.0) ? 1 : 1 / dx;
+
+	i = x0;
+	j = y0;
+	fpart = 0;
+	while (x < x2) {
+	  fpart += step;
+	  rfpart = 1 - fpart;
+	  d1 = x0 * rfpart + x1 * fpart;
+	  d2 = x1 * rfpart + x2 * fpart;
+	  d  = d1 * rfpart + d2 * fpart;
+	  x = (d);
+	  if (x - i < 1)
+		continue;
+
+	  d1 = y0 * rfpart + y1 * fpart;
+	  d2 = y1 * rfpart + y2 * fpart;
+	  d  = d1 * rfpart + d2 * fpart;
+	  y  = (d);
+	  if (j - y > 1) {
+		_line(i, j, x, y, p);
+		/* printf("Line %d %d %d %f\n", i, j, x, d); */
+	  } else {
+		/* printf("%d %d %d %d %f\n", i, j, x, y, fpart); */
+		drawPixel(x, y    , fpart, p);
+		drawPixel(x, y - 1, rfpart, p);
+	  }
+	  i = x, j = y;
+	}
+}
+
 void line(Image *dst, Point p0, Point p1, int end0, int end1, int radius,
 		  Image *src, Point sp)
 {
@@ -214,6 +252,18 @@ void circle(Image *dst, Point c, int a, int thick, Image *src, Point sp)
   p.sp  = sp;
   p.t   = thick;
   _circle(c.x, c.y, a, p);
+}
+
+int bezier(Image *dst, Point p0, Point p1, Point p2, Point p3,
+		   int end0, int end1, int radius, Image *src, Point sp)
+{
+  Param p;
+  p.src = src;
+  p.dst = dst;
+  p.sp  = sp;
+  p.t   = radius;
+  _bezier(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p);
+  return 1;
 }
 
 /* void arc(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, */
