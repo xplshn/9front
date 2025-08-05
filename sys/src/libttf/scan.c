@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
+#include <draw.h>
 #include <ttf.h>
 #include "impl.h"
 
@@ -40,8 +41,141 @@ struct Scan {
 	int stride;
 };
 
+typedef struct Param	Param;
+struct Param {
+	Image	*dst;
+	Image	*src;
+	int     t;
+	Point   sp;
+	Scan    *s;
+};
+
+static void pixel(Scan *s, int x, int y);
+void _bezier1(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Param p);
+void drawPixel(int x, int y, float brightness, Param p);
+
+void swap(int* a , int* b)
+{
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+void _line(int x0, int y0, int x1, int y1, Param p)
+{
+    int steep = fabs(y1 - y0) > fabs(x1 - x0);
+
+    // swap the co-ordinates if slope > 1
+    if (steep)
+    {
+        swap(&x0, &y0);
+        swap(&x1, &y1);
+    }
+    if (x0 > x1)
+    {
+        swap(&x0, &x1);
+        swap(&y0, &y1);
+    }
+
+    // compute the slope
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float gradient;
+    if (dx == 0.0)
+	  gradient = 1.0;
+	else
+	  gradient = dy / dx;
+
+    int xpxl1 = x0;
+    int xpxl2 = x1;
+    float intery = y0;
+	float fpart, rfpart;
+
+    if (steep)
+    {
+        for (int x = xpxl1; x <= xpxl2; x++) {
+		  y0 = floor(intery);
+		  fpart = intery - y0;
+		  rfpart = 1 - fpart;
+		  drawPixel(y0    , x, rfpart, p);
+		  drawPixel(y0 + 1, x, fpart , p);
+		  intery += gradient;
+        }
+    }
+    else
+    {
+        for (int x = xpxl1; x <= xpxl2; x++) {
+		  y0 = floor(intery);
+		  fpart = intery - y0;
+		  rfpart = 1 - fpart;
+		  drawPixel(x	, y0    , rfpart, p);
+		  drawPixel(x	, y0 + 1, fpart , p);
+		  intery += gradient;
+        }
+    }
+}
+
+void _bezier1(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Param p)
+{
+    int i, j, x, y;
+    float d1, d2, d3, d4, d5, d;
+	float fpart, rfpart;
+
+    float dx = x2 - x0;
+    float step = (dx == 0.0) ? 1 : 1 / dx;
+
+	i = x0;
+	j = y0;
+	fpart = 0;
+	while (i + 1 < x2) {
+	  fpart += step;
+	  rfpart = 1 - fpart;
+	  d1 = x0 * rfpart + x1 * fpart;
+	  d2 = x1 * rfpart + x2 * fpart;
+	  d  = d1 * rfpart + d2 * fpart;
+	  x = (d);
+	  if (x - i < 1)
+		continue;
+
+	  d1 = y0 * rfpart + y1 * fpart;
+	  d2 = y1 * rfpart + y2 * fpart;
+	  d  = d1 * rfpart + d2 * fpart;
+	  y  = (d);
+	  if (j - y > 1) {
+		_line(i, j, x, y, p);
+		/* printf("Line %d %d %d %f\n", i, j, x, d); */
+	  } else {
+		/* printf("%d %d %d %d %f\n", i, j, x, y, fpart); */
+		drawPixel(x, y    , fpart, p);
+		drawPixel(x, y - 1, rfpart, p);
+	  }
+	  i = x, j = y;
+	}
+}
+
+void drawPixel(int x, int y, float brightness, Param p)
+{
+ Scan *s = p.s;
+ /* pixel(p.s, x/64, y/64); */
+ x = x >> 6;
+ y = y >> 6;
+ assert(x >= 0 && x < s->width && y >= 0 && y < s->height);
+ s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<7-(x&7));
+}
+
+void
+dobezier(Scan *s, TTPoint p1, TTPoint q, TTPoint r)
+{
+  Param p;
+  /* p.sp  = ZP; */
+  /* p.t   = 1; */
+  p.s   = s;
+ /* print("0 %d %d %d %d\n", p.x, p.y, r.x, r.y); */
+ _bezier1(p1.x, p1.y, q.x, q.y, r.x, r.y, 0, 0, p);
+}
+
 static void
-dobezier(Scan *s, TTPoint p, TTPoint q, TTPoint r)
+dobezier1(Scan *s, TTPoint p, TTPoint q, TTPoint r)
 {
 	vlong m, n;
 	TTLine *l;
@@ -368,7 +502,7 @@ ttfscan(TTGlyph *g)
 	for(i = 0; i < g->ncon; i++){
 		if(g->confst[i] + 1 >= g->confst[i+1]) continue;
 		p = g->pt[g->confst[i]];
-		assert((p.flags & 1) != 0);
+		/* assert((p.flags & 1) != 0); */
 		for(j = g->confst[i]; j++ < g->confst[i+1]; ){
 			if(j < g->confst[i+1] && (g->pt[j].flags & 1) == 0)
 				q = g->pt[j++];
@@ -389,12 +523,12 @@ ttfscan(TTGlyph *g)
 				j--;
 		}
 	}
-	hprep(&s);
-	if((s.flags & DROPOUTS) != 0)
-		vprep(&s);
-	hscan(&s);
-	if((s.flags & DROPOUTS) != 0)
-		vscan(&s);
+	/* hprep(&s); */
+	/* if((s.flags & DROPOUTS) != 0) */
+	/* 	vprep(&s); */
+	/* hscan(&s); */
+	/* if((s.flags & DROPOUTS) != 0) */
+	/* 	vscan(&s); */
 	free(s.hpts);
 	free(s.vpts);
 	free(s.hscanl);
