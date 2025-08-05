@@ -188,35 +188,28 @@ void _ellipse(int x0, int y0, int a, int b, Param p)
 void _bezier(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Param p)
 {
     int i, j, x, y;
-    float d1, d2, d3, d4, d5, d;
-	float fpart, rfpart;
+    float dx, step, fpart, rfpart;
 
-    float dx = x2 - x0;
-    float step = (dx == 0.0) ? 1 : 1 / dx;
-
+    dx = x2 - x0;
+    step = (dx == 0.0) ? 1 : 1 / dx;
 	i = x0;
 	j = y0;
 	fpart = 0;
-	while (x < x2) {
+	while (i + 1 < x2) {
 	  fpart += step;
 	  rfpart = 1 - fpart;
-	  d1 = x0 * rfpart + x1 * fpart;
-	  d2 = x1 * rfpart + x2 * fpart;
-	  d  = d1 * rfpart + d2 * fpart;
-	  x = (d);
+	  x = rfpart * rfpart * x0 + 2 * fpart * rfpart * x1 + fpart * fpart * x2;
 	  if (x - i < 1)
 		continue;
 
-	  d1 = y0 * rfpart + y1 * fpart;
-	  d2 = y1 * rfpart + y2 * fpart;
-	  d  = d1 * rfpart + d2 * fpart;
-	  y  = (d);
+	  y = rfpart * rfpart * y0 + 2 * fpart * rfpart * y1 + fpart * fpart * y2;
 	  if (j - y > 1) {
 		_line(i, j, x, y, p);
 		/* printf("Line %d %d %d %f\n", i, j, x, d); */
 	  } else {
 		/* printf("%d %d %d %d %f\n", i, j, x, y, fpart); */
 		drawPixel(x, y    , fpart, p);
+		if (j != y) // Horizontal straight line
 		drawPixel(x, y - 1, rfpart, p);
 	  }
 	  i = x, j = y;
