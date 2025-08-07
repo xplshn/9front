@@ -118,34 +118,32 @@ void _line(int x0, int y0, int x1, int y1, Param p)
 void _bezier1(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Param p)
 {
     int i, j, x, y;
-    float d1, d2, d3, d4, d5, d;
-	float fpart, rfpart;
+    float dx, step, fpart, rfpart;
 
-    float dx = x2 - x0;
-    float step = (dx == 0.0) ? 1 : 1 / dx;
 
+    if (x0 > x2)
+    {
+        swap(&x0, &x2);
+        swap(&y0, &y2);
+    }
+    dx = x2 - x0;
+    step = (dx == 0.0) ? 1 : 1 / dx;
 	i = x0;
 	j = y0;
 	fpart = 0;
-	while (i + 1 < x2) {
-	  fpart += step;
+	/* fprint(2, "c %d %d %d %d %d %d\n", x0, y0, x1, y1, x2, y2); */
+	while ((fpart += step) < 1.0) {
 	  rfpart = 1 - fpart;
-	  d1 = x0 * rfpart + x1 * fpart;
-	  d2 = x1 * rfpart + x2 * fpart;
-	  d  = d1 * rfpart + d2 * fpart;
-	  x = (d);
+	  x = rfpart * rfpart * x0 + 2 * fpart * rfpart * x1 + fpart * fpart * x2;
 	  if (x - i < 1)
 		continue;
 
-	  d1 = y0 * rfpart + y1 * fpart;
-	  d2 = y1 * rfpart + y2 * fpart;
-	  d  = d1 * rfpart + d2 * fpart;
-	  y  = (d);
-	  if (j - y > 1) {
+	  y = rfpart * rfpart * y0 + 2 * fpart * rfpart * y1 + fpart * fpart * y2;
+	  if (abs(j - y) > 1) {
 		_line(i, j, x, y, p);
-		/* printf("Line %d %d %d %f\n", i, j, x, d); */
+		/* fprint(2, "Line %d %d %d %d\n", i, j, x, y); */
 	  } else {
-		/* printf("%d %d %d %d %f\n", i, j, x, y, fpart); */
+		/* fprint(2, "%d %d %d %d %f\n", i, j, x, y, fpart); */
 		drawPixel(x, y    , fpart, p);
 		drawPixel(x, y - 1, rfpart, p);
 	  }
@@ -159,19 +157,21 @@ void drawPixel(int x, int y, float brightness, Param p)
  /* pixel(p.s, x/64, y/64); */
  x = x >> 6;
  y = y >> 6;
+ if (!(x >= 0 && x < s->width && y >= 0 && y < s->height))
+   return;
+ /* fprint(2, "err %d %d %d %d", x, y, s->width, s->height); */
  assert(x >= 0 && x < s->width && y >= 0 && y < s->height);
  s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<7-(x&7));
 }
 
 void
-dobezier(Scan *s, TTPoint p1, TTPoint q, TTPoint r)
+dobezier(Scan *s, TTPoint p, TTPoint q, TTPoint r)
 {
-  Param p;
-  /* p.sp  = ZP; */
-  /* p.t   = 1; */
-  p.s   = s;
+  Param p1;
+  p1.s   = s;
  /* print("0 %d %d %d %d\n", p.x, p.y, r.x, r.y); */
- _bezier1(p1.x, p1.y, q.x, q.y, r.x, r.y, 0, 0, p);
+ _bezier1(p.x, p.y, q.x, q.y, r.x, r.y, 0, 0, p1);
+ /* _bezier1(p.x>>6, p.y>>6, q.x>>6, q.y>>6, r.x>>6, r.y>>6, 0, 0, p1); */
 }
 
 static void
