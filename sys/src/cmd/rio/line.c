@@ -1,5 +1,24 @@
 /**
 Xiaolin Wu's line algorithm https://en.wikipedia.org/wiki/Xiaolin_Wu%27s_line_algorithm
+
+Copyright (C) 2025  Anand Tamariya
+
+Author: Anand Tamariya <anand@gmail.com>
+Keywords: plan9, keybinding
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 */
 
 #include <u.h>
@@ -190,26 +209,29 @@ void _bezier(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Par
     int i, j, x, y;
     float dx, step, fpart, rfpart;
 
+    if (x0 > x2)
+    {
+        swap(&x0, &x2);
+        swap(&y0, &y2);
+    }
     dx = x2 - x0;
     step = (dx == 0.0) ? 1 : 1 / dx;
 	i = x0;
 	j = y0;
 	fpart = 0;
-	while (i + 1 < x2) {
-	  fpart += step;
+	while ((fpart += step) < 1) {
 	  rfpart = 1 - fpart;
 	  x = rfpart * rfpart * x0 + 2 * fpart * rfpart * x1 + fpart * fpart * x2;
 	  if (x - i < 1)
 		continue;
 
 	  y = rfpart * rfpart * y0 + 2 * fpart * rfpart * y1 + fpart * fpart * y2;
-	  if (j - y > 1) {
+	  if (abs(j - y) > 1) {
 		_line(i, j, x, y, p);
 		/* printf("Line %d %d %d %f\n", i, j, x, d); */
 	  } else {
 		/* printf("%d %d %d %d %f\n", i, j, x, y, fpart); */
 		drawPixel(x, y    , fpart, p);
-		if (j != y) // Horizontal straight line
 		drawPixel(x, y - 1, rfpart, p);
 	  }
 	  i = x, j = y;
