@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <mouse.h>
 #include <event.h>
 #include <cursor.h>
 #include <keyboard.h>
@@ -1150,10 +1151,25 @@ translate(Page *p, Point d)
 {
 	Rectangle r, nr;
 	Image *i;
+	int dx, dy;
 
+	dx = dy = 0;
 	i = p->image;
-	if(i==nil || d.x==0 && d.y==0)
+	if(i == nil || d.x == 0 && d.y == 0
+	   || (d.x > 0 && pos.x >= 0)
+	   || (d.x < 0 && (dx = Dx(screen->r) - pos.x - zoom * Dx(current->image->r)) >= 0)
+	   || (d.y > 0 && pos.y >= 0)
+	   || (d.y < 0 && (dy = Dy(screen->r) - pos.y - zoom * Dy(current->image->r)) >= 0))
 		return;
+
+	if (d.x > 0)
+	  d.x = min(d.x, abs(pos.x));
+	else
+	  d.x = max(d.x, dx);
+	if (d.y > 0)
+	  d.y = min(d.y, abs(pos.y));
+	else
+	  d.y = max(d.y, dy);
 	r = rectaddpt(Rpt(ZP, pagesize(p)), addpt(pos, screen->r.min));
 	pos = addpt(pos, d);
 	nr = rectaddpt(r, d);
@@ -1503,12 +1519,12 @@ docmd(int i, Mouse *m)
 		if(i == Czoomin){
 			if(zoom < 0x1000){
 				zoom *= 2;
-				pos =  addpt(mulpt(subpt(pos, o), 2), o);
+				/* pos =  addpt(mulpt(subpt(pos, o), 2), o); */
 			}
 		}else{
 			if(zoom > 1){
 				zoom /= 2;
-				pos =  addpt(divpt(subpt(pos, o), 2), o);
+				/* pos =  addpt(divpt(subpt(pos, o), 2), o); */
 			}
 		}
 		drawpage(current);
@@ -1751,6 +1767,12 @@ main(int argc, char *argv[])
 				break;
 			case Kpgdown:
 				scroll(Dy(screen->r)/2);
+				break;
+			case Kleft:
+				translate(current, Pt(Dx(screen->r)/3, 0));
+				break;
+			case Kright:
+				translate(current, Pt(-Dx(screen->r)/3, 0));
 				break;
 			default:
 				for(i = 0; i<nelem(cmds); i++)
