@@ -154,14 +154,26 @@ void _bezier1(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Pa
 void drawPixel(int x, int y, float brightness, Param p)
 {
  Scan *s = p.s;
- /* pixel(p.s, x/64, y/64); */
- x = x >> 6;
- y = y >> 6;
- if (!(x >= 0 && x < s->width && y >= 0 && y < s->height))
+ x = x / 64;
+ y = y / 64;
+ if (!(x >= 0 && x < s->width && y >= 0 && y < s->height)) {
+   fprint(2, "err %d %d %d %d", x, y, s->width, s->height);
    return;
- /* fprint(2, "err %d %d %d %d", x, y, s->width, s->height); */
+ }
  assert(x >= 0 && x < s->width && y >= 0 && y < s->height);
- s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<7-(x&7));
+#ifdef GREY
+ s->bit[(s->height - 1 - y) * s->stride + x] |= (int)(255 * brightness);
+#else
+ s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<(7-(x&7)));
+#endif
+}
+
+static void
+pixel(Scan *s, int x, int y)
+{
+ Param p;
+ p.s = s;
+ drawPixel(x, y, 1, p);
 }
 
 void
@@ -171,7 +183,25 @@ dobezier(Scan *s, TTPoint p, TTPoint q, TTPoint r)
   p1.s   = s;
  /* print("0 %d %d %d %d\n", p.x, p.y, r.x, r.y); */
  _bezier1(p.x, p.y, q.x, q.y, r.x, r.y, 0, 0, p1);
- /* _bezier1(p.x>>6, p.y>>6, q.x>>6, q.y>>6, r.x>>6, r.y>>6, 0, 0, p1); */
+
+ TTLine *l;
+ if((s->nlines & LINEBLOCK - 1) == 0)
+		s->lines = realloc(s->lines, sizeof(TTLine) * (s->nlines + LINEBLOCK));
+	l = &s->lines[s->nlines++];
+	if(p.y < r.y){
+		l->x0 = p.x;
+		l->y0 = p.y;
+		l->x1 = r.x;
+		l->y1 = r.y;
+		l->dir = 0;
+	}else{
+		l->x0 = r.x;
+		l->y0 = r.y;
+		l->x1 = p.x;
+		l->y1 = p.y;
+		l->dir = 1;
+	}
+	l->link = -1;
 }
 
 static void
@@ -289,7 +319,7 @@ iswhite(Scan *s, int x, int y)
 }
 
 static void
-pixel(Scan *s, int x, int y)
+pixel1(Scan *s, int x, int y)
 {
 	assert(x >= 0 && x < s->width && y >= 0 && y < s->height);
 	s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<7-(x&7));
@@ -490,8 +520,13 @@ ttfscan(TTGlyph *g)
 //	s.width = (g->pt[g->npt - 1].x + 63) / 64;
 //	s.height = g->font->ascentpx + g->font->descentpx;
 	s.width = -g->xminpx + g->xmaxpx;
-	s.height = -g->yminpx + g->ymaxpx;
+	/* 1px for overshoot */
+	s.height = -g->yminpx + g->ymaxpx + 1;
+#ifdef GREY
+	s.stride = s.width;
+#else
 	s.stride = s.width + 7 >> 3;
+#endif
 	s.bit = mallocz(s.height * s.stride, 1);
 	assert(s.bit != nil);
 	for(i = 0; i < g->npt; i++){

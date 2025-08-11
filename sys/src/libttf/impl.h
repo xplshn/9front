@@ -1,3 +1,5 @@
+#define GREY
+
 enum {
 	ONCURVE = 1,
 	TOUCHX = 2,
