@@ -168,14 +168,6 @@ void drawPixel(int x, int y, float brightness, Param p)
 #endif
 }
 
-static void
-pixel(Scan *s, int x, int y)
-{
- Param p;
- p.s = s;
- drawPixel(x, y, 1, p);
-}
-
 void
 dobezier(Scan *s, TTPoint p, TTPoint q, TTPoint r)
 {
@@ -315,14 +307,24 @@ hprep(Scan *s)
 static int
 iswhite(Scan *s, int x, int y)
 {
+#ifdef GREY
+	return (s->bit[(s->height - 1 - y) * s->stride + x]) == 0;
+#else
 	return (s->bit[(s->height - 1 - y) * s->stride + (x>>3)] >> 7-(x&7) & 1)==0;
+#endif
 }
 
 static void
-pixel1(Scan *s, int x, int y)
+pixel(Scan *s, int x, int y)
 {
+#ifdef GREY
+ Param p;
+ p.s = s;
+ drawPixel(x << 6, y << 6, 1, p);
+#else
 	assert(x >= 0 && x < s->width && y >= 0 && y < s->height);
 	s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<7-(x&7));
+#endif
 }
 
 static int
@@ -490,7 +492,39 @@ vscan(Scan *s)
 		}
 	}
 }
-	
+
+static void fill(Scan *s) {
+  int i, j, e, match;
+
+  for(j = 0; j < s->height; j++) {
+	e = -1;
+	match = 0;
+	fprint(2, "\nj=%d ", j);
+	for(i = 0; i < s->width; i++) {
+	  if (!iswhite(s, i, j)) {
+		fprint(2, "%d ", i);
+		if (e == -1) {
+		  e = i;
+		  match = 0;
+		} else {
+		  if ((i - e) > 1 && !match) {
+			while (++e < i) {
+			  fprint(2, "%d-", e);
+			  pixel(s, e, j);
+			}
+			fprint(2, "%d, ", i);
+			match = 1;
+		  }
+		  e = i;
+		}
+	  } else if (match) {
+		  e = -1;
+		  match = 0;
+	  }
+	}
+  }
+}
+
 void
 ttfscan(TTGlyph *g)
 {
@@ -558,6 +592,7 @@ ttfscan(TTGlyph *g)
 				j--;
 		}
 	}
+	/* fill(&s); */
 	/* hprep(&s); */
 	/* if((s.flags & DROPOUTS) != 0) */
 	/* 	vprep(&s); */
