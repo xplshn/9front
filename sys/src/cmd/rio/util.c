@@ -129,21 +129,21 @@ strrune(Rune *s, Rune c)
 	return nil;
 }
 
-int
-min(int a, int b)
-{
-	if(a < b)
-		return a;
-	return b;
-}
+/* int */
+/* min(int a, int b) */
+/* { */
+/* 	if(a < b) */
+/* 		return a; */
+/* 	return b; */
+/* } */
 
-int
-max(int a, int b)
-{
-	if(a > b)
-		return a;
-	return b;
-}
+/* int */
+/* max(int a, int b) */
+/* { */
+/* 	if(a > b) */
+/* 		return a; */
+/* 	return b; */
+/* } */
 
 char*
 runetobyte(Rune *r, int n, int *ip)

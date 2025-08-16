@@ -1437,6 +1437,7 @@ wmovemouse(Window *w, Point p)
 	moveto(mousectl, p);
 }
 
+void circle(Image *dst, Point c, int a, int thick, Image *src, Point sp);
 
 Window*
 wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)

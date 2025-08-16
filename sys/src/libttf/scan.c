@@ -553,8 +553,8 @@ ttfscan(TTGlyph *g)
 	
 //	s.width = (g->pt[g->npt - 1].x + 63) / 64;
 //	s.height = g->font->ascentpx + g->font->descentpx;
-	s.width = -g->xminpx + g->xmaxpx;
 	/* 1px for overshoot */
+	s.width = -g->xminpx + g->xmaxpx + 1;
 	s.height = -g->yminpx + g->ymaxpx + 1;
 #ifdef GREY
 	s.stride = s.width;

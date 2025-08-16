@@ -1,4 +1,4 @@
-#define GREY
+/* #define GREY */
 
 enum {
 	ONCURVE = 1,

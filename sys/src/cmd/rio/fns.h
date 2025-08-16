@@ -62,8 +62,8 @@ int	parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, cha
 int	writewctl(Xfid*, char*);
 Window *new(Image*, int, int, int, char*, char*, char**);
 void	riosetcursor(Cursor*);
-int	min(int, int);
-int	max(int, int);
+/* int	min(int, int); */
+/* int	max(int, int); */
 Rune*	strrune(Rune*, Rune);
 /* int	isalnum(Rune); */
 /* int	isspace(Rune); */

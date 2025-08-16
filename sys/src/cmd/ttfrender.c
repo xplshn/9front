@@ -5,7 +5,7 @@
 #include <ttf.h>
 #include <ctype.h>
 
-#define GREY
+/* #define GREY */
 
 void
 elidenl(char **sp, int *np)
