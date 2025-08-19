@@ -1123,31 +1123,35 @@ pagesize(Page *p)
 }
 
 void drawgrid(Rectangle r) {
-  Image *src, *bg, *dest;
+  Image *cg, *ct, *bg, *dest;
   char s[10];
   int gap;
   Point x1, x2, y1, y2, sp;
 
-  src = display->black;
+  ct = display->black;
+  cg = allocimage(display, Rect(0, 0, 1, 1), GREY8, 1, 0x777777FF);
   bg  = display->white;
   dest = screen;
   gap = 100/zoom;
-  for(int i = 0; i < Dx(r); i += gap) {
-	if (i == 0) continue;
-
+  for(int i = gap; i < Dx(r); i += gap) {
 	x1 = Pt(r.min.x, r.min.y + i), x2 = Pt(r.max.x, r.min.y + i);
 	y1 = Pt(r.min.x + i, r.min.y), y2 = Pt(r.min.x + i, r.max.y);
-	line(dest, x1, x2, 0, 0, 0, src, ZP);
-	line(dest, y1, y2, 0, 0, 0, src, ZP);
-	if (i % (2 * gap * zoom) == 0) {
-	  sprint(s, "%d", i/zoom);
-	  sp = stringsize(font, s);
-	  x1 = Pt(x1.x, x1.y - sp.y/2);
-	  y1 = Pt(y1.x - sp.x/2, y1.y);
-	  stringbg(dest, x1, src, ZP, font, s, bg, ZP);
-	  stringbg(dest, y1, src, ZP, font, s, bg, ZP);
-	}
+	line(dest, x1, x2, 0, 0, 0, cg, ZP);
+	line(dest, y1, y2, 0, 0, 0, cg, ZP);
   }
+  /* Text on top of grid lines */
+  gap = 2 * gap * zoom;
+  for(int i = gap; i < Dx(r); i += gap) {
+	x1 = Pt(r.min.x, r.min.y + i);
+	y1 = Pt(r.min.x + i, r.min.y);
+	sprint(s, "%d", i/zoom);
+	sp = stringsize(font, s);
+	x1 = Pt(x1.x, x1.y - sp.y/2);
+	y1 = Pt(y1.x - sp.x/2, y1.y);
+	stringbg(dest, x1, ct, ZP, font, s, bg, ZP);
+	stringbg(dest, y1, ct, ZP, font, s, bg, ZP);
+  }
+  freeimage(cg);
 }
 
 void
