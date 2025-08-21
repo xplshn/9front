@@ -35,7 +35,8 @@ struct Scan {
 	int *hpts, *vpts;
 	int nhpts, nvpts;
 	int *hscanl, *vscanl;
-	
+
+	u8int c, *bit1;
 	u8int *bit;
 	int width, height;
 	int stride;
@@ -132,6 +133,8 @@ void _bezier1(int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3, Pa
 	j = y0;
 	fpart = 0;
 	/* fprint(2, "c %d %d %d %d %d %d\n", x0, y0, x1, y1, x2, y2); */
+	drawPixel(x0, y0, 1, p);
+	drawPixel(x2, y2, 1, p);
 	while ((fpart += step) < 1.0) {
 	  rfpart = 1 - fpart;
 	  x = rfpart * rfpart * x0 + 2 * fpart * rfpart * x1 + fpart * fpart * x2;
@@ -162,7 +165,10 @@ void drawPixel(int x, int y, float brightness, Param p)
  }
  assert(x >= 0 && x < s->width && y >= 0 && y < s->height);
 #ifdef GREY
- s->bit[(s->height - 1 - y) * s->stride + x] |= (int)(255 * brightness);
+ int i;
+ i = (s->height - 1 - y) * s->stride + x;
+ s->bit[i] |= (int)(255 * brightness);
+ s->bit1[i] = s->c;
 #else
  s->bit[(s->height - 1 - y) * s->stride + (x>>3)] |= (1<<(7-(x&7)));
 #endif
@@ -308,10 +314,17 @@ static int
 iswhite(Scan *s, int x, int y)
 {
 #ifdef GREY
-	return (s->bit[(s->height - 1 - y) * s->stride + x]) == 0;
+	return (s->bit[(s->height - 1 - y) * s->stride + x]);
+	/* return (s->bit[(s->height - 1 - y) * s->stride + x]) == 0; */
 #else
 	return (s->bit[(s->height - 1 - y) * s->stride + (x>>3)] >> 7-(x&7) & 1)==0;
 #endif
+}
+
+static int
+pointn(Scan *s, int x, int y)
+{
+	return (s->bit1[(s->height - 1 - y) * s->stride + x]);
 }
 
 static void
@@ -494,6 +507,33 @@ vscan(Scan *s)
 }
 
 static void fill(Scan *s) {
+  int i, j, c, dir, e, idx;
+
+  for(j = 0; j < s->height; j++) {
+	dir = 0;
+	e = -1;
+	idx = (s->height - 1 - j) * s->stride;
+	/* fprint(2, "\nj=%d ", j); */
+	for(i = 0; i < s->width; i++) {
+	  if (iswhite(s, i, j)) {
+		c = pointn(s, i, j);
+		/* fprint(2, "%d(%d %d) ", i, c, dir); */
+		if (c == 255 && e != -1) {
+		  if (++e < i) memset(s->bit + idx + e, 255, i - e);
+		  /* while (++e < i) { */
+		  /* 	/\* fprint(2, "%d-", e); *\/ */
+		  /* 	pixel(s, e, j); */
+		  /* } */
+		  e = -1;
+		} else if (c == 1)
+		  e = i;
+		dir = c;
+	  }
+	}
+  }
+}
+
+static void fill1(Scan *s) {
   int i, j, e, match;
 
   for(j = 0; j < s->height; j++) {
@@ -562,6 +602,7 @@ ttfscan(TTGlyph *g)
 	s.stride = s.width + 7 >> 3;
 #endif
 	s.bit = mallocz(s.height * s.stride, 1);
+	s.bit1 = mallocz(s.height * s.stride, 1);
 	assert(s.bit != nil);
 	for(i = 0; i < g->npt; i++){
 		g->pt[i].x -= g->xminpx * 64;
@@ -586,19 +627,21 @@ ttfscan(TTGlyph *g)
 					r.y = (r.y + q.y) / 2;
 				}
 			}
+			s.c = (r.y - p.y) > 0 ? 1 : -1;
 			dobezier(&s, p, q, r);
 			p = r;
 			if(j < g->confst[i+1] && (g->pt[j].flags & 1) == 0)
 				j--;
 		}
 	}
-	/* fill(&s); */
+	fill(&s);
 	/* hprep(&s); */
 	/* if((s.flags & DROPOUTS) != 0) */
 	/* 	vprep(&s); */
 	/* hscan(&s); */
 	/* if((s.flags & DROPOUTS) != 0) */
 	/* 	vscan(&s); */
+	free(s.bit1);
 	free(s.hpts);
 	free(s.vpts);
 	free(s.hscanl);
