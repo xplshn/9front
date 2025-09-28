@@ -1,6 +1,8 @@
 #pragma src "/sys/src/libttf"
 #pragma lib "libttf.a"
 
+#define GREY
+
 typedef struct TTTable TTTable;
 typedef struct TTChMap TTChMap;
 typedef struct TTPoint TTPoint;

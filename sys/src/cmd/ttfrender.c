@@ -5,6 +5,8 @@
 #include <ttf.h>
 #include <ctype.h>
 
+/* #define GREY */
+
 void
 elidenl(char **sp, int *np)
 {
@@ -83,14 +85,30 @@ scaledown(TTBitmap *b, int scale)
 	TTBitmap *a;
 	int i, j;
 	
+#ifdef GREY
+	a = ttfnewbitmap(b->width / scale, b->height / scale);
+#else
 	a = ttfnewbitmap(b->width / scale * 8, b->height / scale);
+#endif
 	if(a == nil) sysfatal("ttfnewbitmap: %r");
 	for(j = 0; j < b->height; j++)
 		for(i = 0; i < b->width; i++){
+#ifdef GREY
+			/* if((b->bit[j * b->stride + i] != 0) */
+		  a->bit[j * a->stride + i    ] = ~b->bit[j * b->stride + i];
+		  /* a->bit[j * a->stride + i + 1] = ~b->bit[j * b->stride + i]; */
+		  /* a->bit[j * a->stride + i + 2] = ~b->bit[j * b->stride + i]; */
+		  /* a->bit[j * a->stride + i + 3] = ~b->bit[j * b->stride + i]; */
+			if(j % scale == scale - 1 && i % scale == scale - 1)
+				a->bit[j/scale * a->stride + i/scale]
+				  = ((a->bit[j/scale * a->stride + i/scale] + scale * scale / 2)
+					  / (scale * scale));
+#else
 			if((b->bit[j * b->stride + (i>>3)] >> 7 - (i & 7) & 1) != 0)
 				a->bit[j/scale * a->stride + i/scale]++;
 			if(j % scale == scale - 1 && i % scale == scale - 1)
 				a->bit[j/scale * a->stride + i/scale] = ~((a->bit[j/scale * a->stride + i/scale] * 255 + scale * scale / 2) / (scale * scale));
+#endif
 		}
 	return a;
 }
@@ -167,7 +185,11 @@ main(int argc, char **argv)
 	d = scaledown(b, scale);
 	if(crop) cropwrite(d);
 	else{
-		print("%11s %11d %11d %11d %11d ", "k8", 0, 0, d->width/8, d->height);
+#ifdef GREY
+		print("%11s %11d %11d %11d %11d ", "r8", 0, 0, d->width, d->height);
+#else
+		print("%11s %11d %11d %11d %11d ", "r8", 0, 0, d->width/8, d->height);
+#endif
 		write(1, d->bit, d->stride * d->height);
 	}
 }

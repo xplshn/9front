@@ -17,12 +17,12 @@ enum
 	EMAXMSG = 128+8192,	/* size of 9p header+data */
 };
 
-struct	Mouse
-{
-	int	buttons;	/* bit array: LMR=124 */
-	Point	xy;
-	ulong	msec;
-};
+/* struct	Mouse */
+/* { */
+/* 	int	buttons;	/\* bit array: LMR=124 *\/ */
+/* 	Point	xy; */
+/* 	ulong	msec; */
+/* }; */
 
 struct	Event
 {
@@ -33,12 +33,12 @@ struct	Event
 	uchar	data[EMAXMSG];	/* message from an arbitrary file descriptor */
 };
 
-struct Menu
-{
-	char	**item;
-	char	*(*gen)(int);
-	int	lasthit;
-};
+/* struct Menu */
+/* { */
+/* 	char	**item; */
+/* 	char	*(*gen)(int); */
+/* 	int	lasthit; */
+/* }; */
 
 /*
  * Events
@@ -57,7 +57,7 @@ extern int	 ecankbd(void);
 extern void	 eresized(int);	/* supplied by user */
 extern int	 emenuhit(int, Mouse*, Menu*);
 extern int	eatomouse(Mouse*, char*, int);
-extern Rectangle	getrect(int, Mouse*);
+/* extern Rectangle	getrect(int, Mouse*); */
 extern void	 esetcursor(Cursor*);
 extern void	 emoveto(Point);
 extern Rectangle	egetrect(int, Mouse*);

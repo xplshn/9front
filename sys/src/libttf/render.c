@@ -156,8 +156,10 @@ flushglyphs(Render *r, int justify)
 		x = (r->b->width - llen)/2;
 		break;
 	default:
-		x = 0;
+		x = 1;
 	}
+	if (r->glyph[0]->xminpx < 0)
+	  x -= r->glyph[0]->xminpx;
 	y = r->oy + f->ascentpx;
 	c = 0;
 	for(i = 0; i < k; i++){

@@ -1,5 +1,6 @@
 #include <u.h>
 #include <libc.h>
+#include <ctype.h>
 #include <draw.h>
 #include <thread.h>
 #include <cursor.h>
@@ -8,7 +9,7 @@
 #include <frame.h>
 #include <fcall.h>
 #include <plumb.h>
-#include <complete.h>
+/* #include <complete.h> */
 #include "dat.h"
 #include "fns.h"
 
@@ -155,7 +156,7 @@ enum
 	MinWater	= 20000,	/* room to leave available when reallocating */
 };
 
-static uint
+uint
 winsert(Window *w, Rune *r, int n, uint q0)
 {
 	uint m;
@@ -241,7 +242,7 @@ wfill(Window *w)
 	}
 }
 
-static void
+void
 wsetselect(Window *w, uint q0, uint q1)
 {
 	int p0, p1;
@@ -346,6 +347,62 @@ wsetname(Window *w)
 	fprint(2, "rio: setname failed: %s\n", err);
 }
 
+void wtagrepaint(Window *w) {
+  Window *w1;
+  Rectangle r1;
+  Fmt f;
+  Rune *rp;
+  uint nr, n;
+  char sfmt[24];
+
+  if (!w->title)
+	return;
+  w1 = w->title;
+  r1 = w1->screenr;
+  runefmtstrinit(&f);
+  fmtprint(&f, "< %s ", w->dir);
+  /* w->modified = 1; */
+  /* w->file = "file.txt"; */
+  if (w->file)
+	fmtprint(&f, "/%s%s", w->file, w->modified ? "*" : "");
+
+  sprint(sfmt, "%s@%s", getenv("user"), getenv("sysname"));
+  n = stringwidth(w->font, sfmt);
+  string(w1->i, Pt(r1.max.x - n - Selborder, r1.min.y + Selborder),
+		 tagcols[TEXT], ZP, w->font, sfmt);
+
+  rp = runefmtstrflush(&f);
+  nr = runestrlen(rp);
+  /* wsetselect(w1, 0, w1->nr); */
+  wdelete(w1, 0, w1->nr);
+  winsert(w1, rp, nr, 0);
+  free(rp);
+}
+
+static Rectangle wtagresize(Window *w, Image *i) {
+  Window *w1;
+  Rectangle r, r1;
+
+  if (w->title)
+	w1 = w->title;
+  else {
+	w1 = emalloc(sizeof(Window));
+	w->title = w1;
+  }
+  r1 = insetrect(i->r, Selborder);
+  r1.max.y = r1.min.y + font->height + 2 * Selborder;
+  r = insetrect(i->r, Selborder+1);
+  r.min.y = r1.max.y;
+  w1->i = allocwindow(wscreen, r1, Refnone, DNofill);
+  w1->screenr = r1;
+  draw(w1->i, r1, tagcols[BACK], nil, ZP);
+  border(w1->i, r1, 1, tagcols[BORD], ZP);
+  frinit(w1, insetrect(r1, Selborder), w->font, w1->i, tagcols);
+  wtagrepaint(w);
+
+  return r;
+}
+
 static void
 wresize(Window *w, Image *i)
 {
@@ -353,7 +410,10 @@ wresize(Window *w, Image *i)
 
 	w->i = i;
 	w->mc.image = i;
-	r = insetrect(i->r, Selborder+1);
+	if (w->enable_title)
+	  r = wtagresize(w, i);
+	else
+	  r = insetrect(i->r, Selborder+1);
 	w->scrollr = r;
 	w->scrollr.max.x = r.min.x+Scrollwid;
 	w->lastsr = ZR;
@@ -421,7 +481,7 @@ wrefresh(Window *w)
  * Need to do this in a separate proc because if process we're interrupting
  * is dying and trying to print tombstone, kernel is blocked holding p->debug lock.
  */
-static void
+void
 interruptproc(void *v)
 {
 	int *notefd;
@@ -438,6 +498,7 @@ struct Completejob
 	char	*dir;
 	char	*str;
 	Window	*win;
+	int 	force;
 };
 
 static void
@@ -450,8 +511,11 @@ completeproc(void *arg)
 	threadsetname("namecomplete %s", job->dir);
 
 	c = complete(job->dir, job->str);
-	if(c != nil && sendp(job->win->complete, c) <= 0)
+	if(c != nil) {
+	  c->force = job->force;
+	  if (sendp(job->win->complete, c) <= 0)
 		freecompletion(c);
+	}
 
 	wclose(job->win);
 
@@ -478,8 +542,8 @@ windfilewidth(Window *w, uint q0, int oneelement)
 	return q0-q;
 }
 
-static void
-namecomplete(Window *w)
+void
+namecomplete(Window *w, int force)
 {
 	int nstr, npath;
 	Rune *path, *str;
@@ -512,12 +576,99 @@ namecomplete(Window *w)
 	job->str = runetobyte(str, nstr, &nstr);
 	job->dir = cleanname(dir);
 	job->win = w;
+	job->force = force;
 	incref(w);
 	proccreate(completeproc, job, STACK);
 }
 
+void wclosepopup(Window *w) {
+  if (w->popup) {
+	w = w->popup;
+	/* Undo existing artifacts */
+	wdelete(w, 0, w->nr);
+	wclosewin(w);
+  }
+}
+
+static Window* mkpopup(Window *w1) {
+  Window *w;
+  w = emalloc(sizeof(Window));
+  w1->popup = w;
+  w->screenr = insetrect(w1->i->r, 100);
+  w->font = w1->font;
+  return w;
+}
+
 static void
-showcandidates(Window *w, Completion *c)
+showcandidates(Window *w1, Completion *c)
+{
+	int i, dx;
+	Fmt f;
+	Rune *rp;
+	uint nr, qline;
+
+	Window *w;
+	Rectangle r;
+	Point p;
+	if (c->nmatch == 0 && !c->force)
+	  return;
+
+	if (w1->popup == nil) {
+	  w = emalloc(sizeof(Window));
+	  w1->popup = w;
+	  r = insetrect(w1->i->r, 100);
+	  w->font = w1->font;
+	} else {
+	  w = w1->popup;
+	  r = w->screenr;
+	  wclosepopup(w);
+	}
+	p = frptofchar(w1, w1->p0);
+
+	runefmtstrinit(&f);
+	if (c->nmatch == 0) {
+	  qline = 1;
+	  fmtprint(&f, "No matches in %d files\n", c->nfile);
+	} else {
+	  qline = min(c->nfile, 5);
+	  for(i=0; i<c->nfile; i++){
+		fmtprint(&f, "%s\n", c->filename[i]);
+	  }
+	}
+	rp = runefmtstrflush(&f);
+	nr = runestrlen(rp);
+
+	r.max.y = r.min.y + qline * w->font->height + 2;
+	dx = Dx(r);
+	if ((p.x + dx) > w1->i->r.max.x) {
+	  /* Keep inside window */
+	  p.x = r.min.x = w1->i->r.min.x + (Dx(w1->i->r) - dx) - 2 * Selborder;
+	  r.max.x = r.min.x + dx;
+	}
+	if ((p.y + Dy(r) + w->font->height) > w1->i->r.max.y) {
+	  /* Above the line */
+	  p = subpt(p, Pt(r.min.x, r.max.y));
+	  r = rectaddpt(r, p);
+	} else {
+	  /* Below the line */
+	  p = addpt(p, Pt(0, w->font->height));
+	  r = rectaddpt(r, subpt(p, r.min));
+	}
+	w->i = allocwindow(wscreen, r, Refnone, DNofill);
+	w->screenr = r;
+	/* draw(w->i, r, cols[BACK], nil, frptofchar(w1, w1->q0)); */
+	border(w->i, r, 1, cols[BORD], ZP);
+	frinit(w, insetrect(r, 1), w->font, w->i, cols);
+
+	winsert(w, rp, nr, 0);
+	/* Highlight */
+	int q0 = w->org + frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y + w->font->height));
+	wsetselect(w, 0, q0);
+	free(rp);
+}
+
+static void
+showcandidates1(Window *w, Completion *c)
 {
 	int i;
 	Fmt f;
@@ -558,7 +709,7 @@ showcandidates(Window *w, Completion *c)
 	free(rp);
 }
 
-static int
+int
 wbswidth(Window *w, Rune c)
 {
 	uint q, eq, stop;
@@ -709,7 +860,7 @@ wsend(Window *w)
 	wshow(w, w->nr);
 }
 
-static void
+void
 wdelete(Window *w, uint q0, uint q1)
 {
 	uint n, p0, p1;
@@ -766,7 +917,8 @@ wpaste(Window *w)
 		wsetselect(w, q0, q0);
 	}else{
 		q0 = winsert(w, snarf, nsnarf, w->q0);
-		wsetselect(w, q0, q0+nsnarf);
+		q0 += nsnarf;
+		wsetselect(w, q0, q0);
 	}
 }
 
@@ -796,13 +948,36 @@ wlook(Window *w)
 }
 
 void
+wrlook(Window *w)
+{
+	int i, n, e;
+
+	i = w->q1;
+	n = i - w->q0;
+	e = w->nr - n;
+	if(n <= 0 || e < n)
+		return;
+
+	i = w->q0 - 1;
+	while(runestrncmp(w->r+w->q0, w->r + i, n) != 0){
+		if(i > 0)
+			i--;
+		else
+			i = e;
+	}
+
+	wsetselect(w, i, i+n);
+	wshow(w, i);
+}
+
+void
 wplumb(Window *w)
 {
 	Plumbmsg *m;
 	static int fd = -2;
 	char buf[32];
 	uint p0, p1;
-	Cursor *c;
+	/* Cursor *c; */
 
 	if(fd == -2)
 		fd = plumbopen("send", OWRITE|OCEXEC);
@@ -831,16 +1006,25 @@ wplumb(Window *w)
 	}
 	m->data = runetobyte(w->r+p0, p1-p0, &m->ndata);
 	if(plumbsend(fd, m) < 0){
-		c = lastcursor;
-		riosetcursor(&query);
-		sleep(300);
-		riosetcursor(c);
+		/* c = lastcursor; */
+		/* riosetcursor(&query); */
+		/* sleep(300); */
+		/* riosetcursor(c); */
+
+		Rune s = '\n';
+		winsert(w, &s, 1, p1);
+		w->qh = p0;
+		w->qh1 = p1;
+		wsetselect(w, p0, p1);
 	}
 	plumbfree(m);
 }
 
+void
+wkeyctl(Window *w, Rune r);
+
 static void
-wkeyctl(Window *w, Rune r)
+wkeyctl1(Window *w, Rune r)
 {
 	uint q0 ,q1;
 	int n, nb;
@@ -963,7 +1147,7 @@ wkeyctl(Window *w, Rune r)
 		return;
 	case Kack:	/* ^F: file name completion */
 	case Kins:	/* Insert: file name completion */
-		namecomplete(w);
+		namecomplete(w, 0);
 		return;
 	case Kbs:	/* ^H: erase character */
 	case Knack:	/* ^U: erase line */
@@ -1253,6 +1437,7 @@ wmovemouse(Window *w, Point p)
 	moveto(mousectl, p);
 }
 
+void circle(Image *dst, Point c, int a, int thick, Image *src, Point sp);
 
 Window*
 wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
@@ -1264,12 +1449,22 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 
 	w = emalloc(sizeof(Window));
 	w->screenr = i->r;
-	r = insetrect(i->r, Selborder+1);
+	w->font = font;
 	w->i = i;
 	w->mc = *mc;
 	w->ck = ck;
 	w->cctl = cctl;
 	w->cursorp = nil;
+	w->popup = nil; //mkpopup(w);
+	w->title = nil;//emalloc(sizeof(Window));
+	w->dir = estrdup(startdir);
+	w->label = estrdup("<unnamed>");
+	w->file = nil;
+	w->enable_title = 1;
+	if (w->enable_title)
+	  r = wtagresize(w, i);
+	else
+	  r = insetrect(i->r, Selborder+1);
 	w->conswrite = chancreate(sizeof(Conswritemesg), 0);
 	w->consread =  chancreate(sizeof(Consreadmesg), 0);
 	w->kbdread =  chancreate(sizeof(Consreadmesg), 0);
@@ -1287,8 +1482,6 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	w->id = ++id;
 	w->notefd = -1;
 	w->scrolling = scrolling;
-	w->dir = estrdup(startdir);
-	w->label = estrdup("<unnamed>");
 	r = insetrect(w->i->r, Selborder);
 	draw(w->i, r, cols[BACK], nil, w->entire.min);
 	wborder(w, Selborder);
@@ -1297,7 +1490,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	return w;
 }
 
-static void
+void
 wclosewin(Window *w)
 {
 	Image *i = w->i;
@@ -1348,6 +1541,8 @@ wclose(Window *w)
 	if(i < 0)
 		error("negative ref count");
 	wclunk(w);
+	wsendctlmesg(w->popup, Exited, ZR, nil);
+	wsendctlmesg(w->title, Exited, ZR, nil);
 	wsendctlmesg(w, Exited, ZR, nil);
 	return 1;
 }
@@ -1367,6 +1562,7 @@ static int
 wctlmesg(Window *w, int m, Rectangle r, void *p)
 {
 	Image *i = p;
+	Window *w1;
 
 	switch(m){
 	default:
@@ -1449,6 +1645,16 @@ wctlmesg(Window *w, int m, Rectangle r, void *p)
 		flushimage(display, 1);
 		break;
 	case Exited:
+	  w1 = w->popup;
+	  wclosewin(w1);
+	  frclear(w1, TRUE);
+	  free(w1);
+
+	  w1 = w->title;
+	  wclosewin(w1);
+	  frclear(w1, TRUE);
+	  free(w1);
+
 		wclosewin(w);
 		frclear(w, TRUE);
 		flushimage(display, 1);
@@ -1466,6 +1672,7 @@ wctlmesg(Window *w, int m, Rectangle r, void *p)
 		chanfree(w->gone);
 		free(w->raw);
 		free(w->r);
+		free(w->file);
 		free(w->dir);
 		free(w->label);
 		free(w);
@@ -1588,6 +1795,9 @@ winctl(void *arg)
 				alts[WCread].op = CHANSND;
 			else{
 				alts[WCread].op = CHANNOP;
+				if (w->qh < w->qh1)
+				  alts[WCread].op = CHANSND;
+				else
 				for(i=w->qh; i<w->nr; i++){
 					c = w->r[i];
 					if(c=='\n' || c=='\004'){
@@ -1707,7 +1917,8 @@ winctl(void *arg)
 					nr = up - rp;
 					break;
 				}
-			w->qh = winsert(w, rp, nr, w->qh)+nr;
+			winsert(w, rp, nr, w->qh);
+			w->qh = w->nr;
 			if(w->scrolling || w->mouseopen)
 				wshow(w, w->qh);
 			wsetselect(w, w->q0, w->q1);
@@ -1761,9 +1972,10 @@ winctl(void *arg)
 			continue;
 		case WComplete:
 			if(w->i!=nil){
-				if(!cr->advance)
+				/* if(!cr->advance) */
 					showcandidates(w, cr);
-				if(cr->advance){
+				if (0) {
+				/* if(cr->advance){ */
 					rp = runesmprint("%s", cr->string);
 					if(rp){
 						nr = runestrlen(rp);

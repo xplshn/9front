@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <mouse.h>
 #include <event.h>
 #include <cursor.h>
 #include <keyboard.h>
@@ -30,6 +31,7 @@ struct Page {
 
 int zoom = 1;
 int ppi = 100;
+int grid = 1;
 int imode;
 int newwin;
 int rotate;
@@ -67,6 +69,7 @@ enum {
 	Cfitheight,
 	Crotate90,
 	Cupsidedown,
+	Cgrid,
 	Cdummy1,
 	Cnext,
 	Cprev,
@@ -91,6 +94,7 @@ struct {
 	[Cfitheight]	"fit height",	'h', 0, 0,
 	[Crotate90]	"rotate 90",	'r', 0, 0,
 	[Cupsidedown]	"upside down",	'u', 0, 0,
+	[Cgrid]	"grid",	'g', 0, 0,
 	[Cdummy1]	"",		0, 0, 0,
 	[Cnext]		"next",		Kright, ' ', '\n', 
 	[Cprev]		"prev",		Kleft, Kbs, 0,
@@ -1118,9 +1122,42 @@ pagesize(Page *p)
 	return p->image != nil ? mulpt(subpt(p->image->r.max, p->image->r.min), zoom) : ZP;
 }
 
+void drawgrid(Rectangle r) {
+  Image *cg, *ct, *bg, *dest;
+  char s[10];
+  int gap;
+  Point x1, x2, y1, y2, sp;
+
+  ct = display->black;
+  cg = allocimage(display, Rect(0, 0, 1, 1), GREY8, 1, 0x777777FF);
+  bg  = display->white;
+  dest = screen;
+  gap = 100/zoom;
+  for(int i = gap; i < Dx(r); i += gap) {
+	x1 = Pt(r.min.x, r.min.y + i), x2 = Pt(r.max.x, r.min.y + i);
+	y1 = Pt(r.min.x + i, r.min.y), y2 = Pt(r.min.x + i, r.max.y);
+	line(dest, x1, x2, 0, 0, 0, cg, ZP);
+	line(dest, y1, y2, 0, 0, 0, cg, ZP);
+  }
+  /* Text on top of grid lines */
+  gap = 2 * gap * zoom;
+  for(int i = gap; i < Dx(r); i += gap) {
+	x1 = Pt(r.min.x, r.min.y + i);
+	y1 = Pt(r.min.x + i, r.min.y);
+	sprint(s, "%d", i/zoom);
+	sp = stringsize(font, s);
+	x1 = Pt(x1.x, x1.y - sp.y/2);
+	y1 = Pt(y1.x - sp.x/2, y1.y);
+	stringbg(dest, x1, ct, ZP, font, s, bg, ZP);
+	stringbg(dest, y1, ct, ZP, font, s, bg, ZP);
+  }
+  freeimage(cg);
+}
+
 void
 drawframe(Rectangle r)
 {
+	if (grid) drawgrid(r);
 	border(screen, r, -Borderwidth, frame, ZP);
 	gendrawdiff(screen, screen->r, insetrect(r, -Borderwidth), ground, ZP, nil, ZP, SoverD);
 	flushimage(display, 1);
@@ -1150,10 +1187,25 @@ translate(Page *p, Point d)
 {
 	Rectangle r, nr;
 	Image *i;
+	int dx, dy;
 
+	dx = dy = 0;
 	i = p->image;
-	if(i==nil || d.x==0 && d.y==0)
+	if(i == nil || d.x == 0 && d.y == 0
+	   || (d.x > 0 && pos.x >= 0)
+	   || (d.x < 0 && (dx = Dx(screen->r) - pos.x - zoom * Dx(current->image->r)) >= 0)
+	   || (d.y > 0 && pos.y >= 0)
+	   || (d.y < 0 && (dy = Dy(screen->r) - pos.y - zoom * Dy(current->image->r)) >= 0))
 		return;
+
+	if (d.x > 0)
+	  d.x = min(d.x, abs(pos.x));
+	else
+	  d.x = max(d.x, dx);
+	if (d.y > 0)
+	  d.y = min(d.y, abs(pos.y));
+	else
+	  d.y = max(d.y, dy);
 	r = rectaddpt(Rpt(ZP, pagesize(p)), addpt(pos, screen->r.min));
 	pos = addpt(pos, d);
 	nr = rectaddpt(r, d);
@@ -1495,6 +1547,10 @@ docmd(int i, Mouse *m)
 		resize = subpt(screen->r.max, screen->r.min);
 		resize.x = 0;
 		goto Unload;
+	case Cgrid:
+	  grid = !grid;
+	  drawpage(current);
+	  break;
 	case Czoomin:
 	case Czoomout:
 		if(current == nil || !canqlock(current))
@@ -1503,12 +1559,12 @@ docmd(int i, Mouse *m)
 		if(i == Czoomin){
 			if(zoom < 0x1000){
 				zoom *= 2;
-				pos =  addpt(mulpt(subpt(pos, o), 2), o);
+				/* pos =  addpt(mulpt(subpt(pos, o), 2), o); */
 			}
 		}else{
 			if(zoom > 1){
 				zoom /= 2;
-				pos =  addpt(divpt(subpt(pos, o), 2), o);
+				/* pos =  addpt(divpt(subpt(pos, o), 2), o); */
 			}
 		}
 		drawpage(current);
@@ -1751,6 +1807,12 @@ main(int argc, char *argv[])
 				break;
 			case Kpgdown:
 				scroll(Dy(screen->r)/2);
+				break;
+			case Kleft:
+				translate(current, Pt(Dx(screen->r)/3, 0));
+				break;
+			case Kright:
+				translate(current, Pt(-Dx(screen->r)/3, 0));
 				break;
 			default:
 				for(i = 0; i<nelem(cmds); i++)

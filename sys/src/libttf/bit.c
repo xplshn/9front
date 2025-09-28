@@ -13,7 +13,11 @@ ttfnewbitmap(int w, int h)
 	if(b == nil) return nil;
 	b->width = w;
 	b->height = h;
+#ifdef GREY
+	b->stride = w;
+#else
 	b->stride = w + 7 >> 3;
+#endif
 	b->bit = mallocz(b->stride * h, 1);
 	if(b->bit == nil){
 		free(b);
@@ -57,6 +61,21 @@ ttfblit(TTBitmap *dst, int dx, int dy, TTBitmap *src, int sx0, int sy0, int sx1,
 	}
 	if(dy1 > dst->height) sy1 -= dy1 - dst->height;
 	if(sx1 <= sx0 || sy1 <= sy0) return;
+#ifdef GREY
+	ss = src->stride - (sx1 - sx0);
+	ds = dst->stride - (dx1 - dx );
+	sp = src->bit + sy0 * src->stride + sx0;
+	dp = dst->bit + dy  * dst->stride + dx;
+	y = sy1 - sy0;
+	do {
+	  x = sx1 - sx0;
+	  while(--x >= 0){
+		*dp++ |= *sp++;
+	  }
+	  sp += ss;
+	  dp += ds;
+	} while(--y > 0);
+#else
 	ss = src->stride - ((sx1-1 >> 3) - (sx0 >> 3) + 1);
 	ds = dst->stride - ((dx1-1 >> 3) - (dx >> 3) + 1);
 	sp = src->bit + sy0 * src->stride + (sx0 >> 3);
@@ -89,4 +108,5 @@ ttfblit(TTBitmap *dst, int dx, int dy, TTBitmap *src, int sx0, int sy0, int sx1,
 		sp += ss;
 		dp += ds;
 	}while(--y > 0);
+#endif
 }

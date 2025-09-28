@@ -583,6 +583,7 @@ xfidwrite(Xfid *x)
 		}
 		free(w->dir);
 		w->dir = cleanname(p);
+		wtagrepaint(w);
 		break;
 
 	case Qwctl:

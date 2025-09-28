@@ -1,3 +1,5 @@
+#include <complete.h>
+
 enum
 {
 	Qdir,			/* /dev for this window */
@@ -148,10 +150,16 @@ struct Window
 	uint			q0;
 	uint			q1;
 	uint			qh;
+	uint			qh1;
+	uint			line, col;
 	int			id;
 	char			name[32];
 	uint			namecount;
 	Rectangle		scrollr;
+	Window		    *popup;
+	Window		    *title;
+	int		    enable_title;
+	Completion      *c;
 	/*
 	 * Rio once used originwindow, so screenr could be different from i->r.
 	 * Now they're always the same but the code doesn't assume so.
@@ -176,36 +184,9 @@ struct Window
 	uchar		winnameread;
 	char			*label;
 	char			*dir;
+	char			*file;
+	int			modified; /* If loaded file is modified */
 };
-
-void		winctl(void*);
-void		winshell(void*);
-Window*	wlookid(int);
-Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
-Window*	wpointto(Point);
-Window*	wtop(Point);
-void		wtopme(Window*);
-void		wbottomme(Window*);
-char*	wcontents(Window*, int*);
-int		wclose(Window*);
-uint		wbacknl(Window*, uint, uint);
-void		wcurrent(Window*);
-void		wuncurrent(Window*);
-void		wcut(Window*);
-void		wpaste(Window*);
-void		wplumb(Window*);
-void		wlook(Window*);
-void		wscrdraw(Window*);
-void		wscroll(Window*, int);
-void		wsend(Window*);
-void		wsendctlmesg(Window*, int, Rectangle, void*);
-void		wsetcursor(Window*, int);
-void		wsetname(Window*);
-void		wsetorigin(Window*, uint, int);
-void		wsetpid(Window*, int, int);
-void		wshow(Window*, uint);
-void		wsnarf(Window*);
-void 		wscrsleep(Window*, uint);
 
 struct Dirtab
 {
@@ -298,6 +279,7 @@ Cursor	*corners[9];
 Cursor	skull;
 
 Image	*background;
+Image	*tagcols[NCOL];
 Image	*cols[NCOL];
 Image	*titlecol;
 Image	*lighttitlecol;
@@ -341,3 +323,14 @@ int		snarfversion;	/* updated each time it is written */
 int		messagesize;		/* negotiated in 9P version setup */
 int		shiftdown;
 int		debug;
+
+enum {
+	Mmod4 = 1<<0,
+	Mctl = 1<<1,
+	Malt = 1<<2,
+	Mshift = 1<<3,
+};
+int mod;
+typedef struct {
+  char *k, *cmd;
+} Keydef;

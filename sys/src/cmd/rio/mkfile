@@ -6,9 +6,11 @@ OFILES=\
 	rio.$O\
 	data.$O\
 	fsys.$O\
+	line.$O\
 	scrl.$O\
 	time.$O\
 	util.$O\
+	ui1.$O\
 	wctl.$O\
 	wind.$O\
 	xfid.$O\

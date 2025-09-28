@@ -104,6 +104,23 @@ char *kbdargv[] = { "rc", "-c", nil, nil };
 
 int errorshouldabort = 0;
 
+Keydef key_map[] = {
+  {"C-x", "cut"}, {"C-c", "copy"}, {"C-v", "paste"}, {"C-Q", "exit"},
+  {"left", "left"}, {"right", "right"}, {"up", "up"}, {"down", "down"},
+  {"C-left", "wordleft"}, {"C-right", "wordright"},
+  {"C-a", "bol"}, {"C-e", "eol"}, {"M-<", "bob"}, {"C-b", "eob"},
+  {"C-f", "find"}, {"C-r", "rfind"}, {"C-ret", "plumb"}, {"C-tab", "autosuggest"}, 
+  {"backspace", "delcharl"}, {"C-d", "delcharr"},
+  {"C-h", "delwordl"}, {"C-D", "delwordr"},
+  {"del", "interrupt"},
+  {"pgup", "scrollup"}, {"pgdown", "scrolldown"},
+  {"C-home", "bob"}, {"C-end", "eob"},
+  {"M-a", "selectall"}, {"C-l", "clear"},
+  nil
+};
+
+void keymap_load(Keydef key_map[]);
+
 void
 derror(Display*, char *errorstr)
 {
@@ -183,6 +200,7 @@ threadmain(int argc, char *argv[])
 		exits("display open");
 	}
 	iconinit();
+	keymap_load(key_map);
 
 	exitchan = chancreate(sizeof(int), 0);
 	winclosechan = chancreate(sizeof(Window*), 0);
@@ -368,8 +386,22 @@ keyboardtap(void*)
 	for(;;){
 		switch(alt(alts)){
 		case Akbd:
-			if(*s == 'k' || *s == 'K')
-				shiftdown = utfrune(s+1, Kshift) != nil;
+			/* if(*s == 'k' || *s == 'K') */
+			/* 	shiftdown = utfrune(s+1, Kshift) != nil; */
+			if(*s == 'k' || *s == 'K') {
+			  mod = 0;
+			  shiftdown = utfrune(s+1, Kshift) != nil;
+			  if(utfrune(s+1, Kmod4) != nil)
+				mod |= Mmod4;
+			  if(utfrune(s+1, Kctl) != nil)
+				mod |= Mctl;
+			  if(utfrune(s+1, Kalt) != nil)
+				mod |= Malt;
+			  /* if(utfrune(s+1, Kshift) != nil) { */
+			  /* 	/\* mod |= Mshift; *\/ */
+			  /* 	shiftdown = 1; */
+			  /* } */
+			}
 			if(totap == nil)
 				goto Bypass;
 			if(input != nil && input != cur){	/* context change */
