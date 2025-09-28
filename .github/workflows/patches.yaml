@@ -1,0 +1,40 @@
+name: Patches my 9front fork using patches of other users
+
+on:
+  schedule:
+    - cron: '0 6 */1 * *'   # daily
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add remotes
+        run: |
+          git remote add gitlab https://gitlab.com/atamariya/plan9front.git
+          git fetch gitlab dev
+
+      - name: Create patch branch
+        run: |
+          git config user.name '󰬭 [CI] '
+          git config user.email 'action@github.com'
+          git checkout -B gitlab-merge front
+          git merge --allow-unrelated-histories gitlab/dev || true
+          git push -f origin gitlab-merge
+
+      - name: Open Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: master          # target branch
+          branch: gitlab-merge  # source branch
+          title: "Sync GitLab/dev patches"
+          body: |
+            Automatic PR bringing the latest commits from
+            [gitlab/dev](https://gitlab.com/atamariya/plan9front/-/tree/dev)
+            into **master**.
