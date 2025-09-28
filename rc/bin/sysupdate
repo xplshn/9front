@@ -1,9 +1,9 @@
 #!/bin/rc -b
 
-#gitRepo = "gits://git.9front.org/plan9front/plan9front"
-#branch = "front"
-gitRepo = "https://github.com/xplshn/9front"
-branch = "master"
+#gitRepo = gits://git.9front.org/plan9front/plan9front
+#branch = front
+gitRepo = https://github.com/xplshn/9front
+branch = master
 
 rfork en
 cd /
