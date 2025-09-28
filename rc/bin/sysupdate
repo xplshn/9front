@@ -1,9 +1,15 @@
 #!/bin/rc -b
+
+#gitRepo = "gits://git.9front.org/plan9front/plan9front"
+#branch = "front"
+gitRepo = "https://github.com/xplshn/9front"
+branch = "master"
+
 rfork en
 cd /
 if(! test -d .git)
 	bind -ac /dist/plan9front /
-if(! ~ `{git/branch} heads/front)
-	>[1=2] echo sysupdate: must be on "front" to pull
+if(! ~ `{git/branch} heads/$branch)
+	>[1=2] echo sysupdate: must be on "$branch" to pull
 if not
-	git/pull -u gits://git.9front.org/plan9front/plan9front
+	git/pull -u $gitRepo
