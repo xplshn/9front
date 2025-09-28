@@ -1,13 +1,14 @@
-name: Patches my 9front fork using patches of other users
+name: GitLab Dev Patch
 
 on:
   schedule:
-    - cron: '0 6 */1 * *'   # daily
+    - cron: '0 6 */1 * *'   # daily at 06:00
   workflow_dispatch:
 
 jobs:
   patch:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -18,6 +19,7 @@ jobs:
         run: |
           git remote add gitlab https://gitlab.com/atamariya/plan9front.git
           git fetch gitlab dev
+          git fetch origin front:front
 
       - name: Create patch branch
         run: |
@@ -30,9 +32,8 @@ jobs:
       - name: Open Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: master          # target branch
-          branch: gitlab-merge  # source branch
+          base: master
+          branch: gitlab-merge
           title: "Sync GitLab/dev patches"
           body: |
             Automatic PR bringing the latest commits from
