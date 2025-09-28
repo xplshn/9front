@@ -1,4 +1,4 @@
-name: Sync with git://git.etalabs.net/musl
+name: Sync with https://github.com/9front/9front
 
 on:
   #schedule:
@@ -17,15 +17,15 @@ jobs:
         ref: 'master'
 
     # Add source repo:
-    - name: Add git://git.etalabs.net/musl remote
+    - name: Add https://github.com/9front/9front remote
       run: |
-        git remote add source git://git.etalabs.net/musl
+        git remote add source https://github.com/9front/9front
 
-    - name: Fetch changes from git://git.etalabs.net/musl
+    - name: Fetch changes from https://github.com/9front/9front
       run: |
         git fetch source
 
-    - name: Merge changes from git://git.etalabs.net/musl
+    - name: Merge changes from https://github.com/9front/9front
       run: |
         git config user.name '󰬭 [CI] '
         git config user.email 'action@github.com'
