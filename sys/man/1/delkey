@@ -1,0 +1,11 @@
+.TH DELKEY 1
+.SH NAME
+delkey \- delete keys from factotum
+.SH SYNOPSIS
+.B delkey
+.SH DESCRIPTION
+.I Delkey
+prints commands for deleting each key stored in
+.IR factotum (4) .
+.SH SOURCE
+.B /rc/bin/delkey

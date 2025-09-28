@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+TARG=cb
+OFILES=\
+	cb.$O\
+	cbtype.$O\
+
+HFILES=cb.h\
+	cbtype.h\
+
+BIN=/$objtype/bin
+
+< /sys/src/cmd/mkone

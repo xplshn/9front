@@ -1,0 +1,44 @@
+.TH ETHERMULTILINK 8
+.SH NAME
+ethermultilink \- switch between multiple interfaces on a bridge
+.SH SYNOPSIS
+.B ethermultilink
+.I primary
+.I secondary
+[
+.I secondary
+]...
+.B > /net/bridge0/ctl
+.SH DESCRIPTION
+Ethermultilink takes a
+.I primary
+ethernet interface and a list of
+.I secondary
+interfaces in increasing priority order.
+It checks the link status of the
+secondary interfaces and if any are
+link-active, bridges the primary
+and the highest priority secondary
+interface together by outputting
+.IR bridge (4)
+commands on standard output.
+The link status of all the secondary interfaces
+is checked once per second and the commands to
+change the active secondary are output as needed.
+.SH EXAMPLE
+.EX
+# make the bridge
+bind -a '#B' /net
+# mount the ethernet
+bind -a '#l0' /net
+# mount the wifi
+bind -a '#l1' /net
+# roam between wifi and ethernet
+ethermultilink /net/ether1 /net/ether0 > /net/bridge0/ctl
+# setup ip on the primary
+ip/ipconfig ether /net/ether1
+.EE
+.SH SOURCE
+.B /rc/bin/ethermultilink
+.SH "SEE ALSO"
+.IR bridge (3).

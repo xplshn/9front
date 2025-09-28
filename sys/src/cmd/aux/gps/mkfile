@@ -1,0 +1,12 @@
+</$objtype/mkfile
+
+TARG=\
+	gpsfs\
+	gpsevermore\
+	
+OFILES=\
+	util.$O
+
+BIN=/$objtype/bin/aux
+
+</sys/src/cmd/mkmany

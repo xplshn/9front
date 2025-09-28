@@ -1,0 +1,45 @@
+</$objtype/mkfile
+
+TARG=\
+	send\
+	filter\
+
+LIB=../common/libcommon.a$O
+
+OFILES=\
+	message.$O\
+	dest.$O\
+	log.$O\
+	skipequiv.$O\
+	../smtp/rfc822.tab.$O\
+
+SOBJ=\
+	authorize.$O\
+	bind.$O\
+	cat_mail.$O\
+	gateway.$O\
+	local.$O\
+	main.$O\
+	rewrite.$O\
+	translate.$O\
+
+FOBJ=cat_mail.$O
+
+HFILES=\
+	send.h\
+	../common/common.h\
+	../common/sys.h\
+
+</sys/src/cmd/mkmany
+<../mkupas
+CFLAGS=$CFLAGS -I../common
+
+$O.send: $SOBJ $OFILES
+	$LD $LDFLAGS -o $target $prereq $LIB
+
+$O.filter: $FOBJ
+
+message.$O: ../smtp/rfc822.tab.h
+
+../smtp/rfc822.tab.h ../smtp/rfc822.tab.$O: ../smtp/rfc822.y
+	cd ../smtp && mk rfc822.tab.h rfc822.tab.$O

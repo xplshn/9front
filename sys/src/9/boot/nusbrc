@@ -1,0 +1,89 @@
+#!/bin/rc
+if(! bind -a '#u' /dev)
+	exit
+
+mkdir -p -m 700 '#σc/usb'
+mkdir -p -m 700 '#σc/usbnet'
+
+if(! nusb/usbd $usbdebug)
+	exit
+
+@{
+	rfork ne
+	fn attach {
+		id=$1
+		if(~ $#* 5 && ! test -e /env/nousbhname)
+			id=$1:$5
+		switch($2$3){
+		case 0b957720 0b95772a 0db0a877 13b10018 15577720 20013c05 07d13c05 05ac1402
+			nusb/ether -t a88772 $etherargs $id
+		case 0b951780 14eaab11 17370039 0411006e 050d5055
+			nusb/ether -t a88178 $etherargs $id
+		case 0b951790
+			nusb/ether -t a88179 $etherargs $id
+		case 2001abc1
+			nusb/ether -t aue $etherargs $id
+		case 0bda8150
+			nusb/ether -t url $etherargs $id
+		case 18d14ee3 0bb40003 10046344
+			nusb/ether -t rndis $etherargs $id
+		case 12092301 # keyboardio model 01 (IAD)
+			nusb/kb $id
+		# prevent attachment to nusb/kb for:
+		case 048d5702 # ITE RGB LED Controller
+		case 054c0268 # sony dualshock 3 (ps3) controller
+		case *
+			switch($4){
+			case *03
+				nusb/kb $id
+			case ff0202 0104ef 0301e0
+				nusb/ether -t rndis $etherargs $id
+			case *02
+				# CDC ethernet
+				nusb/ether $etherargs $id
+			case *08
+				if(nusb/disk $id) @{
+					rfork ne
+					cd '#σ/usb'
+					devs=sdU^($1 $5)
+					for(dev in $devs $devs.*) if(test -d $dev) {
+						diskparts $dev
+						for(part in $dev/dos* $dev/9fat* $dev/data) if(test -r $part && ~ `{fstype $part} dos) {
+							mkdir -m 0700 '#σc/'^$dev || exit
+							{dossrv -s -f $part <[0=1] &} |
+								echo 0 >'#σc/'^$dev/dos
+							exit
+						}
+					}
+				}
+			case *
+				# Raspberry Pi ethernet will always appear as /net/etherU0
+				if(~ $2 0424){
+					if(~ $3 7800)
+						nusb/ether -t lan78xx $etherargs $1:0
+					if not
+						nusb/ether -t smsc $etherargs $1:0
+				}
+			}
+		}
+	}
+	fn detach {
+		devs='#σc/sdU'^($1 $5)
+		rm -rf '#σc/usb/'^$1.* '#σc/usb/'^$5.hid '#σc/usbnet/'^$1.* $devs $devs.*
+	}
+	rc < '#σ/usb/usbevent' &
+}
+
+# usbd removes this file once all devices have been enumerated
+if(test -e /env/usbbusy) sleep 0.6
+if(test -e /env/usbbusy) sleep 0.8
+if(test -e /env/usbbusy) sleep 1.0
+if(test -e /env/usbbusy) sleep 1.2
+if(test -e /env/usbbusy) sleep 1.4
+if(test -e /env/usbbusy) sleep 1.6
+if(test -e /env/usbbusy) sleep 1.8
+if(test -e /env/usbbusy) sleep 2.0
+if(test -e /env/usbbusy) echo $0^': warning: USB device enumeration incomplete.' >[1=2]
+
+bind -a '#σ/usb' /dev
+bind -a '#σ/usbnet' /net

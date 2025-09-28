@@ -1,0 +1,7 @@
+</$objtype/mkfile
+
+TARG=unesc
+OFILES=unesc.$O
+
+</sys/src/cmd/mkone
+<../mkupas

@@ -1,0 +1,193 @@
+#!/bin/rc
+rfork e
+net=/net
+if(~ $#* 1)
+	net=$1
+fn query {
+	ndb/query -x $net -cia $*
+}
+fn checkether {
+	echo -n '	'$1'='$2
+	if(! ~ $2 [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f])
+		echo ' has wrong format'
+	if not if(! grep -s $i $net/ether*/addr)
+		echo ' does not belong to any network interface'
+	if not
+		echo ' looks ok'
+}
+fn checkip {
+	echo -n '	'$1'='$2
+	if(! ~ $2 *.*.*.* *:*:*:*:*:*:*:* *::*)
+		echo ' does not look like an ip address'
+	if not
+		echo ' looks ok'
+}
+fn checksys {
+	echo -n '	'$1'='$2
+	if(~ $2 *.*)
+		echo ' contains a dot, it will be confused for a domain name or ip address'
+	if not
+		echo ' looks ok'
+}
+fn checkdom {
+	echo -n '	'$1'='$2
+	if(! ~ $2 *.*)
+		echo ' does not have a dot'
+	if not if(~ $2 *.)
+		echo ' has a trailing period'
+	if not
+		echo ' looks ok'
+}
+fn checkhost {
+	if(~ $sysname ''){
+		echo 'env var $sysname is not set'
+		exit 'fail'
+	}
+	checksys 'env var $sysname' $sysname
+	echo 'checking this host''s tuple:'
+	sys=`{query sys $sysname sys}
+	if(! ~ $sysname $sys)
+		echo '	no sys= entry'
+	if not {
+		for(i in $sys){
+			checksys sys $i
+		}
+	}
+	ip=`{query sys $sysname ip}
+	if(~ $ip '')
+		echo '	no ip= entry'
+	if not {
+		for(i in $ip){
+			checkip ip $i
+		}
+	}
+	dom=`{query sys $sysname dom}
+	if(~ $dom '')
+		echo '	no dom= entry'
+	if not {
+		for(i in $dom){
+			checkdom dom $i
+			if(! ~ $i $sysname^.*)
+				echo '	dom='$i 'does not start with' $sysname^'; it''s supposed to be the FQDN, not the domain name!'
+		}
+	}
+	ether=`{query sys $sysname ether}
+	if(~ $ether '')
+		echo '	no ether entry'
+	if not {
+		for(i in $ether){
+			checkether ether $i
+		}
+	}
+}
+fn checknet {
+	echo 'checking the network tuple:'
+	ipnet=`{query sys $sysname ipnet}
+	if(~ $ipnet ''){
+		echo '	we are not in an ipnet, so looking for entries in host tuple only'
+	}
+	if not {
+		echo '	we are in ' 'ipnet='^$ipnet
+	}
+	ipgw=`{query sys $sysname ipgw}
+	if(~ $ipgw '' '::'){
+		echo '	we do not have an internet gateway, no ipgw= entry'
+	}
+	if not {
+		for(i in $ipgw) {
+			checkip ipgw $i
+		}
+	}
+	dns=`{query sys $sysname dns}
+	if(~ $dns '')
+		echo '	no dns= entry'
+	if not {
+		for(i in $dns){
+			if(! ip/ping -n 1 $i >/dev/null >[2=1])
+				echo '	dns='$i 'does not reply to ping'
+			if not
+				echo '	dns='$i 'looks ok'
+		}
+	}
+	auth=`{query sys $sysname auth}
+	if(~ $auth '')
+		echo '	no auth= entry'
+	if not {
+		for(i in $auth){
+			if(! ip/ping -n 1 $i >/dev/null >[2=1])
+				echo '	auth='$i 'does not reply to ping'
+			if not {
+				authok=1
+				echo '	auth='$i 'looks ok'
+			}
+		}
+	}
+	fs=`{query sys $sysname fs}
+	if(~ $fs '')
+		echo '	no fs= entry (needed for tls boot)'
+	if not {
+		for(i in $fs){
+			if(! ip/ping -n 1 $i >/dev/null >[2=1])
+				echo '	fs='$i 'does not reply to ping (needed for tls boot)'
+			if not
+				echo '	fs='$i 'looks ok'
+		}
+	}
+}
+fn checkauth {
+	echo 'checking auth server configuration:'
+	if(~ $auth ''){
+		echo '	no auth server'
+		exit fail
+	}
+	if not {
+		for(i in $auth){
+			if(~ $i $sys $dom $ip){
+				echo '	we are the auth server '^$i
+				authisus=1
+			}
+		}
+	}
+	if(~ $authisus 1){
+		if(! grep -s keyfs <{ps})
+			echo '	auth/keyfs is not running, try reboot'
+		if not
+			echo '	auth/keyfs is running'
+		if(! grep -s 'Listen *567' <{netstat -n $net})
+			echo '	no one listening on port 567, try reboot'
+		if not {
+			echo '	someone is listening on port 567'
+			echo '	run auth/debug to test the auth server'
+		}
+		echo '	run auth/asaudit to verify auth server configuration'
+	}
+	if not {
+		echo '	we are not the auth server(s):' $auth
+		echo '	if this is a mistake, set auth='$sys(1) 'or auth='^($sys(2-) $dom)
+		if(~ $authok 1)
+			echo '	run auth/debug to test the auth server'
+	}
+}
+fn checksec {
+	echo 'checking basic security:'
+	for(fs in `{query sys $sysname fs}) @{
+		rfork n
+		if(srv $fs netaudit.$pid >[2] /dev/null || srvtls $fs netaudit.$pid >[2] /dev/null){
+			if(mount -N /srv/netaudit.$pid /n/netaudit >/dev/null >[2=1])
+				echo '	fs='$fs 'allows none attach. mistake?'
+			if not
+				echo '	fs='$fs 'does not allow none attach. ok'
+			if(mount -n /srv/netaudit.$pid /n/netaudit >/dev/null >[2=1])
+				echo '	fs='$fs 'does not require auth for user '^$user^'. mistake?'
+			if not
+				echo '	fs='$fs 'seems to require auth. ok'
+		}
+		if not
+			echo '	fs='$fs 'is not listening'
+		rm -f /srv/netaudit.$pid
+	}
+}
+checkhost
+checknet
+checkauth
+checksec

@@ -1,0 +1,33 @@
+</$objtype/mkfile
+
+TARG=imap4d
+
+OFILES=\
+	auth.$O\
+	copy.$O\
+	csquery.$O\
+	date.$O\
+	debug.$O\
+	fetch.$O\
+	folder.$O\
+	fsenc.$O\
+	fstree.$O\
+	imp.$O\
+	imap4d.$O\
+	list.$O\
+	mbox.$O\
+	msg.$O\
+	mutf7.$O\
+	nodes.$O\
+	print.$O\
+	quota.$O\
+	search.$O\
+	store.$O\
+	utils.$O\
+
+HFILES=\
+	imap4d.h\
+	fns.h\
+
+</sys/src/cmd/mkone
+<../mkupas

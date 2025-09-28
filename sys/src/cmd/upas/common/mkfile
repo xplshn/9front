@@ -1,0 +1,18 @@
+</$objtype/mkfile
+
+LIB=libcommon.a$O
+OFILES=\
+	aux.$O\
+	become.$O\
+	config.$O\
+	folder.$O\
+	flags.$O\
+	fmt.$O\
+	libsys.$O\
+	process.$O\
+
+HFILES=\
+	common.h\
+	sys.h\
+
+</sys/src/cmd/mklib

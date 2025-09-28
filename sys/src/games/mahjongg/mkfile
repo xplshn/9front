@@ -1,0 +1,14 @@
+</$objtype/mkfile
+BIN=/$objtype/bin/games
+
+TARG=mahjongg
+OFILES=\
+	mahjongg.$O\
+	graphics.$O\
+	level.$O\
+	logic.$O\
+
+
+HFILES=mahjongg.h\
+
+</sys/src/cmd/mkone

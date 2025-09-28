@@ -1,0 +1,20 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin/games
+TARG=gba
+OFILES=\
+	cpu.$O\
+	mem.$O\
+	gba.$O\
+	ppu.$O\
+	ev.$O\
+	apu.$O\
+	state.$O\
+	eui.$O\
+	gpio.$O\
+
+HFILES=dat.h fns.h
+
+</sys/src/cmd/mkone
+eui.$O: ../eui.c
+	$CC $CFLAGS ../eui.c

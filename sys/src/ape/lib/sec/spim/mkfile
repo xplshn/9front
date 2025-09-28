@@ -1,0 +1,10 @@
+APE=/sys/src/ape
+<$APE/config
+
+LIB=/$objtype/lib/ape/libsec.a
+
+HFILES=/sys/include/ape/libsec.h
+
+OFILES=\
+
+</sys/src/cmd/mksyslib

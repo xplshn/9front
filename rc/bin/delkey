@@ -1,0 +1,8 @@
+#!/bin/rc
+
+rfork e
+
+ctl = /mnt/factotum/ctl
+
+sed 's/ ![0-9a-zA-Z_]+\??/ /g; s/''/''''/g; s/ +$//' $ctl | \
+	awk -v 'ctl='^$ctl ' { printf "echo ''del%s'' > %s\n", $0, ctl } '

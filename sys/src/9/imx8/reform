@@ -1,0 +1,66 @@
+dev
+	root
+	cons
+	swap
+	env
+	pipe
+	proc
+	mnt
+	srv
+	shr
+	dup
+	tls
+	cap
+	fs
+	ether	netif
+	bridge	log
+	ip	arp chandial ip ipv6 ipaux iproute netlog nullmedium pktmedium inferno
+	draw	screen swcursor
+	mouse	screen swcursor
+	uart
+	usb
+	i2c
+	rtc	devi2c
+	pci	pci
+	sd
+	audio
+
+link
+	usbxhciimx	usbxhci
+	etherimx	ethermii
+	etheriwl	pci wifi
+	ethersink
+	ethermedium
+	loopbackmedium
+	netdevmedium
+	i2cimx		devi2c
+	pciimx		pci
+	sai
+	usdhc
+	gpio
+
+ip
+	tcp
+	udp
+	il
+	ipifc
+	icmp
+	icmp6
+	igmp
+	ipmux
+misc
+	ccm
+	gic
+	gpc
+	lcd
+	uartimx
+	iomux
+	sdnvme	pci
+	sdmmc	usdhc
+port
+	int cpuserver = 0;
+bootdir
+	boot
+	/$objtype/bin/paqfs
+	/$objtype/bin/auth/factotum
+	$CONF.bootfs.paq	bootfs.paq

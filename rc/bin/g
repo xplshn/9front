@@ -1,0 +1,38 @@
+#!/bin/rc
+rfork e
+nl='
+'
+flags=()
+recurse=()
+files=()
+while(! ~ $#* 1 && ~ $1 -* && ! ~ $1 --){
+	if(~ $1 '-n')
+		recurse=-n1
+	if not
+		flags=($flags $1);
+	shift
+}
+if(~ $1 --)
+	shift
+if(~ $#* 0) {
+	echo 'usage: g [flags] pattern [files]' >[1=2]
+	exit usage
+}
+pattern=$1
+shift
+
+suffixes='\.([bcChlmsSy]|asm|awk|cc|cgi|cpp|cs|cxx|go|goc|ha|hpp|hs|hxx|in|java|lua|lx|md|mk|ml|mli|ms|myr|pl|py|rc|rs|sh|sl|tex|xy|txt)$'
+fullnames='(^|/)mkfile$'
+repodirs='(^|/)(.git|.hg)($|/)'
+switch($#*){
+case 0
+	walk -f $recurse | grep -e $fullnames -e $suffixes >[2]/dev/null
+case *
+	for(f in $*){
+		if(test -d $f)
+			walk -f $recurse -- $f \
+				| grep -e $fullnames -e $suffixes >[2]/dev/null
+		if not
+			echo $f
+	}
+} | grep -v $repodirs | xargs grep -n $flags -- $pattern /dev/null

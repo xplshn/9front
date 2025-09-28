@@ -1,0 +1,18 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libsat.a
+
+OFILES=\
+	misc.$O \
+	satadd.$O \
+	satrange.$O \
+	satsolve.$O \
+	satmore.$O \
+	debug.$O \
+	satget.$O \
+
+HFILES=\
+	/sys/include/sat.h\
+	impl.h\
+
+</sys/src/cmd/mksyslib

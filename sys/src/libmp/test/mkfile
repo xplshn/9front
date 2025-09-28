@@ -1,0 +1,18 @@
+</$objtype/mkfile
+
+TEST=\
+	main
+
+OFILES=\
+	ld.$O\
+	gen.tab.$O\
+	convtest.$O\
+
+HFILES=dat.h fns.h
+
+CLEANFILES=gen.tab.c
+
+</sys/src/cmd/mktest
+
+gen.tab.c:D: testgen.rc
+	rc ./testgen.rc >gen.tab.c

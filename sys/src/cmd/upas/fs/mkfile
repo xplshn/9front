@@ -1,0 +1,30 @@
+</$objtype/mkfile
+
+TARG=fs
+LIB=../common/libcommon.a$O
+OFILES=\
+	cache.$O\
+	fs.$O\
+	header.$O\
+	idx.$O\
+	imap.$O\
+	mbox.$O\
+	mdir.$O\
+	mtree.$O\
+	plan9.$O\
+	pop3.$O\
+	remove.$O\
+	rename.$O\
+	strtotm.$O\
+	tls.$O\
+
+HFILES=\
+	../common/common.h\
+	dat.h\
+
+</sys/src/cmd/mkone
+<../mkupas
+CFLAGS=$CFLAGS  -I../common
+
+acid:V:
+	$CC -a $CFLAGS fs.c>a$O

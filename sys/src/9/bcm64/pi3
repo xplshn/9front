@@ -1,0 +1,67 @@
+dev
+	root
+	cons
+	swap
+	env
+	pipe
+	proc
+	mnt
+	srv
+	shr
+	dup
+	arch
+	tls
+	cap
+	fs
+	ether	netif
+	bridge	log
+	ip	arp chandial ip ipv6 ipaux iproute netlog nullmedium pktmedium inferno
+	draw	screen swcursor
+	mouse
+	uart	gpio
+	gpio	gpio
+	i2c
+	sd
+	usb
+	dtracy
+
+link
+	archbcm3
+	usbdwc
+	ether4330
+	ethermedium
+	loopbackmedium 
+	netdevmedium
+	emmc
+	sdhost
+#	i2cbcm		devi2c
+	i2cgpio		devi2c gpio
+
+ip
+	tcp
+	udp
+	ipifc
+	icmp
+	icmp6
+	igmp
+	ipmux
+
+misc
+	uartmini
+	uartpl011
+	sdmmc	emmc
+	dma
+	vcore
+	irq
+
+	dtracysys
+	dtracytimer
+
+port
+	int cpuserver = 0;
+
+bootdir
+	boot
+	/$objtype/bin/paqfs
+	/$objtype/bin/auth/factotum
+	$CONF.bootfs.paq	bootfs.paq

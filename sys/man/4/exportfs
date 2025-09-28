@@ -1,0 +1,180 @@
+.TH EXPORTFS 4
+.SH NAME
+exportfs, srvfs \- file server plumbing
+.SH SYNOPSIS
+.B exportfs
+[
+.B -dsR
+]
+[
+.B -m
+.I msize
+]
+[
+.B -r
+.I root
+]
+[
+.B -P
+.I patternfile
+]
+[
+.B -S
+.I srvfile
+]
+.PP
+.B srvfs
+[
+.B -dR
+]
+[
+.B -p
+.I perm
+]
+[
+.B -P
+.I patternfile
+] [
+.B -e
+.I exportprog
+]
+.I name
+.I path
+.SH DESCRIPTION
+.I Exportfs
+is a user level file server that allows Plan 9 cpu servers, rather
+than file servers, to export portions of a name space.
+It is usually started by other programs such as
+.IR rcpu (1)
+after a secure channel has been established.
+.I Exportfs
+then acts as a relay file server: operations in the imported file
+tree are executed on the remote server and the results returned.  This
+gives the appearance of exporting a name space from a remote machine
+into a local file tree.
+.PP
+The options are:
+.TP
+.B -d
+Log all 9P traffic to standard error.
+.TP
+.B -P \fIpatternfile
+Restrict the set of exported files.
+.I Patternfile
+contains one regular expression per line,
+to be matched against path names
+relative to the current working directory
+and starting with
+.BR / .
+For a file to be exported, all lines with a prefix
+.B +
+must match and all those with prefix
+.B -
+must not match.
+.TP
+.B -R
+Make the served name space read only.
+.TP
+.B -r \fIroot
+Serve the name space rooted at
+.IR root .
+.TP
+.B -S \fIservice
+Serve the result of mounting
+.IR service .
+A separate mount is used for each
+.IR attach (5)
+message,
+to correctly handle servers in which each mount
+corresponds to a different client
+.IR e.g. , (
+.IR rio (4)).
+.TP
+.B -s
+equivalent to
+.B -r
+.BR / ;
+kept for compatibility.
+.TP
+.B -m \fImsize
+Set the maximum message size that 
+.I exportfs
+should offer to send (see
+.IR version (5));
+this helps tunneled
+9P connections to avoid unnecessary fragmentation.
+.PD
+.PP
+.I Srvfs
+invokes
+.I exportprog
+(default
+.BR /bin/exportfs )
+to create a mountable file system from a name space
+and posts it at
+.BI /srv/ name ,
+which is created with mode
+.I perm
+(default 0600).
+The name space is the directory tree rooted at 
+.IR path .
+The
+.BR -d ,
+.BR -P ,
+and
+.B -R
+options, if present, are relayed to
+.IR exportprog .
+.SH EXAMPLES
+To export the archive of one user for one month, except for secrets,
+.IP
+.EX
+cd /n/dump
+echo '+ ^/(2003(/10..(/usr(/glenda/?)?)?)?)?' > /tmp/pattern
+echo '- \e.(aes|pgp)$' >> /tmp/pattern
+exportfs -P /tmp/pattern
+.EE
+.LP
+Use
+.I srvfs
+to enable mounting of an FTP file system (see
+.IR ftpfs (4))
+in several windows, 
+or to publish a
+.B /proc
+(see
+.IR proc (3))
+with a broken process so a remote person may debug the program:
+.IP
+.EX
+srvfs ftp /n/ftp
+srvfs broke /mnt/term/proc
+.EE
+.LP
+Use 
+.I srvfs
+to obtain a copy of a service to be manipulated directly
+by a user program like
+.IR nfsserver (8):
+.IP
+.EX
+srvfs nfs.boot /srv/boot
+aux/nfsserver -f /srv/nfs.boot
+.EE
+.LP
+Use
+.I srvfs
+to spy on all accesses to a particular subtree:
+.IP
+.EX
+srvfs -d spy /
+tail -f /tmp/exportdb &
+mount /srv/spy /n/spy
+cd /n/spy; ls
+.EE
+.SH SOURCE
+.B /sys/src/cmd/exportfs
+.br
+.B /sys/src/cmd/srvfs.c
+.SH SEE ALSO
+.IR rcpu (1)

@@ -1,0 +1,17 @@
+#!/bin/rc
+flags=()
+while(~ $1 -*){
+	flags=($flags $1)
+	shift
+}
+if(~ $#* 0){
+	*=(rc -i)
+}
+/acme/bin/$cputype/winfs $flags $1 >/dev/null >[2=1] || {
+	# compat
+	exec /acme/bin/$cputype/win $*
+	exit
+}
+echo dump win $* > /dev/acme/ctl
+</dev/cons >/dev/cons >[2=1] $*
+exit ''

@@ -1,0 +1,27 @@
+</$objtype/mkfile
+
+TARG=6c
+OFILES=\
+	cgen.$O\
+	enam.$O\
+	list.$O\
+	sgen.$O\
+	swt.$O\
+	txt.$O\
+	reg.$O\
+	peep.$O\
+	pgen.$O\
+	pswt.$O\
+	machcap.$O\
+	div.$O\
+	mul.$O\
+
+HFILES=\
+	gc.h\
+	6.out.h\
+	../cc/compat.h\
+	../cc/cc.h\
+
+T=6
+<../cc/mkfile.port
+</sys/src/cmd/mkone

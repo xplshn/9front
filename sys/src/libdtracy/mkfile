@@ -1,0 +1,16 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libdtracy.a
+
+OFILES=\
+	prov.$O\
+	prog.$O\
+	dtefmt.$O\
+	pack.$O\
+	chan.$O\
+	agg.$O\
+
+HFILES=\
+	/sys/include/dtracy.h\
+
+</sys/src/cmd/mksyslib

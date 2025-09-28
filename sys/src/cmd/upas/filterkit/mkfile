@@ -1,0 +1,14 @@
+</$objtype/mkfile
+
+TARG=\
+	deliver\
+	list\
+	mbappend\
+	token\
+
+LIB=../common/libcommon.a$O
+OFILES=readaddrs.$O
+
+</sys/src/cmd/mkmany
+<../mkupas
+CFLAGS=$CFLAGS -I../common

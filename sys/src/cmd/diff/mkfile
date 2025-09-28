@@ -1,0 +1,13 @@
+< /$objtype/mkfile
+
+TARG=diff merge3
+OFILES=\
+	diffdir.$O\
+	diffio.$O\
+	diffreg.$O\
+	util.$O
+
+HFILES=diff.h
+
+BIN=/$objtype/bin
+</sys/src/cmd/mkmany

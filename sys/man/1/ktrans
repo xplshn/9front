@@ -1,0 +1,238 @@
+.TH KTRANS 1
+.SH NAME
+ktrans \- language transliterator
+.SH SYNOPSIS
+.B ktrans
+[
+.B -G
+]
+[
+.B -l
+.I lang
+]
+[
+.I kbdtap
+]
+.SH DESCRIPTION
+.I Ktrans
+transliterates a stream of keyboard
+events. Without any arguments,
+.I ktrans
+reads events from standard input
+and writes out converted events to stdout.
+If a
+.I kbdtap
+file is given, it is used for both
+input and output instead.
+By default
+.I ktrans
+starts in passthrough mode, echoing out
+the input with no conversions. The initial
+language is set with the
+.B -l
+flag. After operation has begun, the language
+may be changed by either typing a control sequence
+and/or through the plumber.
+The following table provides the control
+sequence and
+.I lang
+strings accepted for each supported language respectfully.
+.TP
+English (Passthrough).
+ctl-t and en
+.TP
+Japanese Hiragana.
+ctl-n and jp
+.TP
+Japanese Katakana.
+ctl-k and jpk
+.TP
+Chinese.
+ctl-c and zh
+.TP
+Korean.
+ctl-s and ko
+.TP
+Vietnamese.
+ctl-v and vn
+.PP
+.I Ktrans
+listens on the
+.I lang
+plumber port for switching languages. The data accepted
+on this port is the same as the
+.B -l
+flag's
+.I lang
+argument.
+.SH CONVERSION
+Conversion is done in two layers, an implicit
+layer for unambiguous mappings, and an explicit
+layer for selecting one match out of a list of
+ambiguous matches. The following control characters
+are used for conversion instructions.
+.TP
+.B ctl-\e
+Explicitly match the current input, consecutive inputs of ctl-\e
+will cycle through all the possible options.
+.TP
+.B ctl-l
+Reset the current input buffer.
+.PP
+The implicit layer happens automatically as characters
+are input, transforming a consecutive set of key strokes
+in to their rune counterpart. A series of runes may then
+be explicitly matched by cycling through a list of options.
+.I Ktrans
+automatically maintains a buffer of the current series of
+key strokes being considered for an explicit match, and resets
+that buffer on logical "word" breaks depending on the language.
+However in some cases the automatic hinting will be insufficient.
+.PP
+Input is always passed along, when a match is found
+.I Ktrans
+will emit backspaces to clear the input sequence and replace
+it with the matched sequence. Once
+.B ctl-\e
+has been used to start the selection of an explicit match, the
+up and down arrow keys may be used to thumb around the options.
+.SH DISPLAY
+.I Ktrans
+will provide a graphical display of current explicit conversion
+candidates as implicit conversion is done. Candidates are highlighted
+as a user cycles through them. At the bottom of the list is an exit
+button for quitting the program. Keyboard input typed in to the window is
+transliterated but discarded, providing a scratch input space. The mouse
+may be used to scroll through and select candidates, but it requires that
+.I ktrans
+is started using
+.IR rio (1)'s
+.B -k
+flag.
+.PP
+The
+.B -G
+flag disables the graphical display entirely.
+.SH "KEY MAPPING"
+For convenience, the control characters used by
+.I ktrans
+can be mapped directly to physical keys through modifications
+of the kbmap (see
+.IR kbdfs (8)).
+The
+.B /sys/lib/kbmap/jp
+mapping will turn language input keys
+present on Japanese A01/106/109(A) in to control
+sequences matching their label:
+.TP
+.B Henkan
+Convert to Kanji (ctl-\e)
+.TP
+.B Muhenkan
+Clear Kanji buffer (ctl-l)
+.TP
+.B Hiragana / Katakana
+Switch to Hiragana (ctl-n)
+.TP
+.B Shift + Hiragana / Katakana
+Switch to Katakana (ctl-k)
+.TP
+.B Hankaku / Zenkaku
+Switch to Hiragana (ctl-n)
+.TP
+.B Shift + Hankaku / Zenkaku
+Switch to passthrough (ctl-t)
+.TP
+.B Shift + Space
+Convert to Kanji (ctl-\e).
+This is a fallback for keyboards without a physical Henkan key.
+.SH DICTIONARIES
+All implicit and explicit matching dictionaries are provided as plain
+text files within
+.BR /lib/ktrans .
+The formats of which are specified within
+.IR ktrans (6).
+Additionally, dictionaries located in
+.B $home/lib/ktrans/
+will be merged on top of the system dictionaries.
+Merging is done at a list level only; Keys that appear
+replace all values of the previous definition.
+.PP
+For backwards compatibility the
+.B jisho
+and
+.B zidian
+environment variables may also be set to pick alternate system dictionaries
+for Japanese and Chinese respectfully.
+.SH LANGUAGES
+.SS JAPANESE
+The Hiragana and Katakana modes implicitly turn Hepburn representations
+in to their Kana counterparts. Explicit conversions combine sequences
+of Hiragana in to Kanji.
+.PP
+Capital Latin input is used for hinting. For adjectives and verbs, a single
+capital is used as an Okurigana hint. For example,
+.ft Jp
+動かす
+.ft
+is typed as 'ugoKasu[^\e]'. The hint serves two purposes, it is
+provided as part of the explicit sequence for Kanji lookup and denotes
+that the following runes are Okurigana. 
+.PP
+For particles, the entire Kana may be input in upper case. This similarly
+denotes the end of the Kanji portion of the sequence, but is not used
+as part of the lookup sequence itself. So to write
+.ft Jp
+私の猫
+.ft
+the user types "watashiNO[^\e]neko[^\e]". Note that in both cases
+we have successfully communicated to ktrans when to reset the explicit
+match buffer without needing to explicitly give a ctl-l character.
+.SS CHINESE
+Implicit conversion converts punctuation. Explicit matches
+use a dictionary to convert a series of Latin characters
+into Hanzi. By default a Wubizixing input dictionary
+is used. Additionally a Pinyin input dictionary 
+is provided.
+.SS VIETNAMESE
+Implicit conversion is modeled after Telex, supporting
+standard diacritic suffixes.
+.SS KOREAN
+Mapping is done by emulating a Dubeolsik layout, with each Latin
+character mapping to a single Jamo. Sequences of Jamo are automatically
+converted to Hangul syllables.
+.SH EXAMPLES
+To type the following Japanese text:
+
+.ft Jp
+私は毎日35分以上歩いて、 更に10分電車に乗って学校に通います。
+ 健康の維持にも役だっていますが、 なかなかたのしいものです。
+.ft
+
+your keyboard typing stream should be:
+
+watashiHA[^\e]mainichi[^\e]35[^l]fun[^\e]ijou[^\e]aruIte,[^\e]
+saraNI[^\e]10[^l]fun[^\e]denshaNI[^\e]noTte[^\e]gakkouNI[^\e]
+kayoImasu.[\en]kenkouNO[^\e]ijiNImo[^\e]yakuDAtteimasuga,[^\e]
+nakanakatanoshiImonodesu.[\en]
+
+where [^\e] and [^l] indicate 'ctl-\e' and 'ctl-l',
+respectively.
+.SH SOURCE
+.B /sys/src/cmd/ktrans
+.SH SEE ALSO
+.IR ktrans (6),
+.IR rio (4),
+.IR kbdfs (8)
+.SH BUGS
+.PP
+There is no hint from rio when the user moves the cursor, as such
+moving it is unlikely to result in what the user expects.
+.PP
+Plan 9 lacks support for rendering combinational Unicode sequences,
+limiting the use of some code ranges.
+.SH HISTORY
+Ktrans was originally written by Kenji Okamoto in August of 2000 for
+the 2nd edition of Plan 9.  It was imported in to 9front in July of
+2022, with patches by several contributors. It was towed inside
+the environment during the 2022 9front hackathon.

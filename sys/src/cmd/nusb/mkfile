@@ -1,0 +1,33 @@
+</$objtype/mkfile
+
+DIRS=\
+	lib\
+	kb\
+	audio\
+	ether\
+	usbd\
+	disk\
+	serial\
+	ptp\
+	joy\
+	cam\
+
+default:V: all
+
+none:VQ:
+	echo mk all, install, installall, safeinstall, safeinstallall, clean, nuke, or update
+
+all clean nuke:VQ:
+	for (i in $DIRS) @{
+		cd $i && echo $i: && mk $target
+	}
+
+install installall safeinstall safeinstallall:V:
+	for (i in $DIRS) @{
+		cd $i && mk $target
+	}
+
+test:
+	for(d in $DIRS) @{
+		cd $d && mk $MKFLAGS test
+	}

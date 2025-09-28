@@ -1,0 +1,34 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/lib9p.a
+OFILES=\
+	auth.$O\
+	dirread.$O\
+	fid.$O\
+	file.$O\
+	intmap.$O\
+	mem.$O\
+	req.$O\
+	parse.$O\
+	queue.$O\
+	uid.$O\
+	util.$O\
+	srv.$O\
+	post.$O\
+	mount.$O\
+	share.$O\
+	listen.$O\
+	rfork.$O\
+	thread.$O\
+	threadsrv.$O\
+	threadpostsrv.$O\
+	threadpostmountsrv.$O\
+	threadpostsharesrv.$O\
+	threadlistensrv.$O\
+
+HFILES=/sys/include/9p.h
+
+</sys/src/cmd/mksyslib
+
+$O.ramfs: ramfs.$O $LIB
+	$LD -o $target $prereq

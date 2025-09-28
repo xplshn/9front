@@ -1,0 +1,71 @@
+#!/bin/rc
+
+# desc: subdivide plan 9 disk partition
+# prereq: partdisk
+
+useesp=no
+
+fn autotype {
+	if(~ $useesp no)
+		parts=(9fat)
+	if not
+		parts=()
+	switch($fstype){
+	case cwfs cwfs64 cwfs64x
+		parts=($parts nvram fscache fsworm other)
+	case hjfs gefs
+		parts=($parts nvram fs)
+	}
+	echo '-a '^$parts
+}
+
+switch($1) {
+case checkready
+	disks=(/dev/sd*/plan9*)
+	if(! test -f $disks(1)){
+		prepdisk=notdone
+		export prepdisk
+	}
+
+case go
+	echo 'The following Plan 9 disk partitions were found.'
+	echo
+	disks=(/dev/sd*/plan9*)
+	for (i in $disks){
+		echo $i
+		echo q | disk/prep -r $i >[2]/dev/null
+		echo
+	}
+	if(~ $#disks 1)
+		default=(-d $disks)
+	if not
+		default=()
+	prompt $default 'Plan 9 partition to subdivide' $disks
+	disk=$rd
+
+	if(ls `{basename -d $disk}^/esp >[2]/dev/null){
+		echo
+		echo 'By default 9front places its boot materials on its own 9fat partition.'
+		echo 'This requires the firmware be capable of booting from fat partitions other than the esp.'
+		echo 'You can also place all boot materials directly on the esp instead.'
+		echo 'This option works with a larger set of machines, but may disrupt existing configurations.'
+		echo
+		prompt -d no 'Use esp as 9fat?' no yes
+		useesp=$rd
+	}
+
+	echo 'This is disk/prep; use it to subdivide the Plan 9 partition.'
+	echo 'If it is not yet subdivided, a sensible layout will be suggested;'
+	echo 'you can probably just type ''w'' and then ''q''.'
+	echo
+	disk/prep `{autotype} $disk
+	disk/prep -p $disk >`{basename -d $disk}^/ctl >[2]/dev/null
+
+case checkdone
+	disks=(/dev/sd*/nvram)
+	if(! test -f $disks(1))
+		prepdisk=ready
+	if(! ~ $prepdisk ready)
+		prepdisk=done
+	export prepdisk
+}

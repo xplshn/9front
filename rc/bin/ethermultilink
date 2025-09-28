@@ -1,0 +1,65 @@
+#!/bin/rc
+
+# ethermultilink outpus bridge(3) commands to switch
+# between multiple ethernet (or wifi) interfaces
+# depending on their link status.
+
+rfork e
+
+fn usage {
+	echo 'Usage: ' $0 'primaryether secondaryether1 [secondaryether2 ....] > /net/bridgeX/ctl' >[1=2]
+	exit 'usage'
+}
+fn missing {
+	echo 'missing: ' $1 >[1=2]
+	exit 'missing'
+}
+
+
+~ $#* 0 1 && usage
+
+# make sure arguments are ethernets
+for(i){
+	test -r $i/stats || missing $i/stats
+}
+
+# first interface is the primary
+primary=$1
+shift
+
+net=`{echo $primary | sed 's!/*[^/]*$!!g'}
+test -r $net/arp || missing $net/arp
+
+# now select secondary from the list depending on link status
+@{
+old=/dev/null
+while(){
+	# interfaces are in increasing priority order
+	new=$primary
+	for(i){
+		if(grep -s 'link: 1' $i/stats)
+			new=$i
+	}
+	if(! ~ $new $old){
+		if(! ~ $old /dev/null){
+			if(! ~ $old $primary) {
+				echo unbind bypass primary 0
+				echo unbind ether secondary 0
+			}
+		}
+		if(! ~ $new $primary){
+			echo bind bypass primary 0 $primary
+			echo bind ether secondary 0 $new
+		}
+
+		# do gratious arp on the new path
+		for(ip in `{awk '$3=="4u" || $3=="6u" {print $1}' $net/ipselftab}){
+			echo garp $ip > $net/arp || echo flush > $net/arp
+		}
+		old=$new
+	}
+	sleep 1
+}
+} </dev/null &
+
+exit ''

@@ -1,0 +1,190 @@
+.TH REFORM 1
+.SH NAME
+audio,
+pm,
+shortcuts
+- MNT Reform 2 support utilities
+.SH SYNOPSIS
+.B reform/audio
+[
+.B -1
+]
+[
+.B -D
+]
+[
+.B -m
+.I mountpoint
+]
+[
+.B -s
+.I service
+]
+.PP
+.B reform/pm
+[
+.B -D
+]
+[
+.B -m
+.I mountpoint
+]
+[
+.B -s
+.I service
+]
+.PP
+.B reform/shortcuts
+[
+.B -l
+.I light_step
+]
+[
+.B -v
+.I vol_step
+]
+.SH DESCRIPTION
+These programs provide support for certain functions of MNT Reform 2
+computing device.  Some of them also make controlling file systems
+available under
+.BR /dev .
+.PP
+.SS Audio
+.I audio
+initializes the DAC (Digital-to-Analog Converter) on the platform and
+provides a standard \fIaudio\fR(3) interface to control volume and
+other parameters.
+With
+.I -1
+only the initialization is performed and the program exits
+immediately.
+.PP
+The following files are provided by the program:
+.TP
+.B audioctl
+Shows the current status
+.I (on
+or
+.I off )
+of the three "outputs" -
+.BR master ,
+.B hp
+and
+.BR spk .
+Each can be enabled, disabled or toggled, by writing a single line to
+the same file, consisting of the output name and the desired action -
+.I on ,
+.I off
+or
+.I toggle ,
+accordingly.
+.IP
+DAC can be reinitialized by writing a single
+.BR reset .
+.TP
+.B volume
+Provides an interface for volume control (see \fIaudio\fR(3)).  For
+ease of use,
+.B volume
+supports relative adjustments by prefixing a number with a sign.
+\fImaster +1\fR, for example, will increase the volume on
+.B master
+by 1%, which is 0.5dB for this particular output. For
+.B hp
+and
+.B spk
+one percent is 1dB.
+.IP
+Enhanced stereo separation can be enabled by writing
+.BR 3d ,
+followed by desired percentage of the effect.
+.SS Power and monitoring
+.I pm
+presents a file system consisting of the following files:
+.TP
+.B battery
+Returns attached battery array statistics in the same manner as
+\fIacpi\fR(8).
+.TP
+.B cputemp
+Exposes the current temperature reading of the CPU.
+.TP
+.B kbdoled
+An uncompressed Plan 9 image can be written to the file to display on
+the keyboard OLED.  Zero-length write clears the display.
+.TP
+.B light
+Provides a way to control the backlight of the built-in LCD by
+writing \fIlcd [-+]N\fR, \fIkbd [-+]N\fR, or \fItb N N N N N\fR,
+where
+.I N
+is expressed in percentage, either as an absolute value (0-100) or
+relative to the current brightness - by prefixing with a sign. For the
+trackball (\fItb\fR) only 0 and 1 are valid values.
+Reading
+.B light
+returns the current brightness.
+.TP
+.B pmctl
+Reading
+.B pmctl
+gives the System Controller firmware version string, voltage (mV) of
+each cell and current(mA) of the battery array.
+.IP
+Writing
+.I power off
+to
+.B pmctl
+will turn off all power rails, which is what \fIfshalt\fR(8) does
+after halting the file systems.
+.SS Shortcuts
+.I shortcuts
+enables LCD brightness and audio volume adjustment via keyboard
+shortcuts.
+.PP
+The program uses Rio's
+.I kbdtap
+to function:
+.IP
+.EX
+reform/shortcuts </dev/kbdtap >/dev/kbdtap
+.EE
+.PP
+.I Hyper+F1/F2
+decreases/increases LCD brightness,
+.I Hyper+F7/F8/F9
+skips to the previous track, (un)pauses or skips to the next track in
+.IR zuke (1),
+.I Hyper+F10
+(un)mutes the audio,
+.I Hyper+F11/F12
+decreases/increases "mix" volume, or "master" if former isn't
+available.  Optionally, a single step amount
+can be set with
+.I -l
+for LCD light level (default is 5) and
+.I -v
+for volume (default is 3).  Values can be negative to essentially swap
+the decrement and increment keys.
+.SH SOURCE
+.B /sys/src/cmd/reform
+.SH SEE ALSO
+.IR audio (3)
+.SH HISTORY
+MNT Reform 2 support first appeared in 9front (August, 2022).
+.SH BUGS
+Only 44100Hz (default) and 48000Hz sample rates are supported with
+.BR audio ,
+recording is not implemented.
+.PP
+.B Light
+was chosen as a shorter alternative to
+.BR brightness .
+.PP
+Current keyboard light level reading is only an indication, there is
+no way to get the actual value from the keyboard.
+.PP
+Values displayed in the
+.B battery
+file are not precise, cell capacities are hardcoded in the System
+Controller firmware.

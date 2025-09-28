@@ -1,0 +1,52 @@
+.TH DIAL 1
+.SH NAME
+dial - connect to a remote service
+.SH SYNOPSIS
+.B aux/dial
+.RB [ -e ]
+[
+.B -o
+.I msg
+]...
+.I addr
+[
+.I cmd
+[
+.I args
+]...
+]
+.SH DESCRIPTION
+Dial connects to the remote network address
+.I addr
+(see
+.IR dial (2))
+and if no
+.I cmd
+is specified, copies data from the connection to standard output,
+and from standard input to the network connection.
+.PP
+By default, dial exits when end of file is reached on
+standard input or on the network connection.
+The
+.B -e
+flag causes dial to exit only in response to end of file on
+the network connection.
+.PP
+If
+.I cmd
+is given, then
+.I cmd
+is executed with standard input and output connected to
+the network connection.
+.PP
+The -o option cause protocol-specific control messages
+to be written to the control file of the network connection
+(see
+.IR ip (3)).
+It can be specified multiple times.
+.SH SOURCE
+.B /sys/src/cmd/aux/dial.c
+.SH SEE ALSO
+.IR dial (2),
+.IR listen (8),
+.IR ip (3)

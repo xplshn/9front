@@ -1,0 +1,18 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin
+TARG=ktrans
+HFILES=hash.h
+TESTDEP=$O.test
+CLEANFILES=$O.test
+OFILES=\
+	hash.$O\
+	main.$O\
+
+</sys/src/cmd/mkone
+
+$O.test: test.$O
+	$LD $LDFLAGS -o $target $prereq
+
+test:V: $O.out $O.test
+	./$O.test $O.out

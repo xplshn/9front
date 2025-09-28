@@ -1,0 +1,101 @@
+.TH RIOW 1
+.SH NAME
+riow \- keyboard-controller for rio(1)
+.SH SYNOPSIS
+.B riow
+[
+.I -s label
+]
+.SH DESCRIPTION
+.I Riow
+provides keyboard controlling for
+.IR rio (1)
+in the manner of
+.IR i3 ,
+.I sway
+and
+.IR ratpoison .
+It does so by working with
+.I /dev/kbdtap
+(see \fIrio\fR(4)) and
+.IR /dev/wsys .
+.I Riow
+outputs the current desktop number onto fd 3, which can be used by programs like
+.IR bar (1).
+.SS Running
+A minimal example of running
+.I riow
+with status output to
+.IR bar (1):
+.EX
+	#!/bin/rc
+	</dev/kbdtap riow >/dev/kbdtap |[3] bar
+.EE
+Example of running
+.I riow
+with other programs handling input:
+.EX
+	#!/bin/rc
+	</dev/kbdtap ktrans -G |
+		reform/shortcuts |
+		riow >/dev/kbdtap |[3] bar
+.EE
+Both examples assume putting the rc pipeline into a script and executing
+it with
+.IR window (1)
+if they are required to start using
+.I riostart
+script.
+.SS Keyboard shortcuts
+.TP
+.B Kmod4+0…9
+Switches to the specified virtual desktops. There are ten in total.
+.TP
+.B Kmod4+Shift+0…9
+Moves the current window to the specified virtual desktop.
+.TP
+.B Kmod4+f
+Toggle between fullscreen and normal mode for the current window.
+.TP
+.B Kmod4+s
+Toggle "sticky" mode for the current window. In this mode the window is staying
+while the user is switching between desktops. By default, programs like
+.IR winwatch ,
+.IR catclock ,
+.IR kbmap ,
+etc are in sticky mode. Additional programs can be added to that list on startup by
+specifying their labels with
+.I -s
+option.
+.TP
+.B Kmod4+enter
+Spawn a new
+.IR window (1).
+.TP
+.B Kmod4+shift+q
+Delete the current window.
+.TP
+.B Kmod4+h/j/k/l
+Focus left/down/up/right.
+.TP
+.B Kmod4+arrows
+Move the current window in the specified direction.
+.TP
+.B Kmod4+control+arrows
+Same, but in bigger steps.
+.TP
+.B Kmod4+shift+arrows
+Resize the current window.
+.TP
+.B Kmod4+shift+control+arrows
+Same, but in bigger steps.
+.SH SOURCE
+/sys/src/cmd/riow.c
+.SH SEE ALSO
+.IR bar (1),
+.IR rio (4),
+.IR ktrans (1)
+.SH HISTORY
+Riow first appeared in 9front (September, 2022).
+.SH BUGS
+Yes.

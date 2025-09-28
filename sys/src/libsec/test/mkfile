@@ -1,0 +1,18 @@
+</$objtype/mkfile
+
+TEST=\
+	blake2s\
+	aesgcm\
+	bf\
+	chacha\
+	eg\
+	hmac\
+	md4\
+	prime\
+	rsa\
+	sha2\
+	x25519\
+
+CFLAGS=$CFLAGS -I../../libmp/port
+
+</sys/src/cmd/mktest

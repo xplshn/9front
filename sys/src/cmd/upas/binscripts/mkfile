@@ -1,0 +1,33 @@
+</$objtype/mkfile
+
+RCFILES=\
+	isspam\
+	msgcat\
+	spam\
+	tfmt\
+	unspam\
+
+all:Q:
+	;
+
+installall:Q:	install
+	;
+
+install:V: ${RCFILES:%=$BIN/%}
+
+safeinstall:V: install
+
+safeinstallall:V: install
+
+clean:Q:
+	;
+nuke:V:
+	rm -f $BIN/^($RCFILES)
+
+$BIN/%: %.rc
+	cp $stem.rc $BIN/$stem
+
+test:VQ:
+	# nothing
+
+<../mkupas

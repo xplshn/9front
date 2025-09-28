@@ -1,0 +1,584 @@
+/*
+ * VFPv2 or VFPv3 floating point unit
+ */
+#include "u.h"
+#include "../port/lib.h"
+#include "mem.h"
+#include "dat.h"
+#include "fns.h"
+#include "ureg.h"
+#include "arm.h"
+
+/* subarchitecture code in m->havefp */
+enum {
+	VFPv2	= 2,
+	VFPv3	= 3,
+};
+
+/* fp control regs.  most are read-only */
+enum {
+	Fpsid =	0,
+	Fpscr =	1,			/* rw */
+	Mvfr1 =	6,
+	Mvfr0 =	7,
+	Fpexc =	8,			/* rw */
+	Fpinst= 9,			/* optional, for exceptions */
+	Fpinst2=10,
+};
+enum {
+	/* Fpexc bits */
+	Fpex =		1u << 31,
+	Fpenabled =	1 << 30,
+	Fpdex =		1 << 29,	/* defined synch exception */
+//	Fp2v =		1 << 28,	/* Fpinst2 reg is valid */
+//	Fpvv =		1 << 27,	/* if Fpdex, vecitr is valid */
+//	Fptfv = 	1 << 26,	/* trapped fault is valid */
+//	Fpvecitr =	MASK(3) << 8,
+	/* FSR bits appear here */
+	Fpmbc =		Fpdex,		/* bits exception handler must clear */
+
+	/* Fpscr bits; see u.h for more */
+	Stride =	MASK(2) << 20,
+	Len =		MASK(3) << 16,
+	Dn=		1 << 25,
+	Fz=		1 << 24,
+	/* trap exception enables (not allowed in vfp3) */
+	FPIDNRM =	1 << 15,	/* input denormal */
+	Alltraps = FPIDNRM | FPINEX | FPUNFL | FPOVFL | FPZDIV | FPINVAL,
+	/* pending exceptions */
+	FPAIDNRM =	1 << 7,		/* input denormal */
+	Allexc = FPAIDNRM | FPAINEX | FPAUNFL | FPAOVFL | FPAZDIV | FPAINVAL,
+	/* condition codes */
+	Allcc =		MASK(4) << 28,
+};
+enum {
+	/* CpCPaccess bits */
+	Cpaccnosimd =	1u << 31,
+	Cpaccd16 =	1 << 30,
+};
+
+static char *
+subarch(int impl, uint sa)
+{
+	static char *armarchs[] = {
+		"VFPv1 (unsupported)",
+		"VFPv2",
+		"VFPv3+ with common VFP subarch v2",
+		"VFPv3+ with null subarch",
+		"VFPv3+ with common VFP subarch v3",
+	};
+
+	if (impl != 'A' || sa >= nelem(armarchs))
+		return "GOK";
+	else
+		return armarchs[sa];
+}
+
+static char *
+implement(uchar impl)
+{
+	if (impl == 'A')
+		return "arm";
+	else
+		return "unknown";
+}
+
+static int
+havefp(void)
+{
+	int gotfp;
+	ulong acc, sid;
+
+	if (m->havefpvalid)
+		return m->havefp;
+
+	m->havefp = 0;
+	gotfp = 1 << CpFP | 1 << CpDFP;
+	cpwrsc(0, CpCONTROL, 0, CpCPaccess, MASK(28));
+	acc = cprdsc(0, CpCONTROL, 0, CpCPaccess);
+	if ((acc & (MASK(2) << (2*CpFP))) == 0) {
+		gotfp &= ~(1 << CpFP);
+		print("fpon: no single FP coprocessor\n");
+	}
+	if ((acc & (MASK(2) << (2*CpDFP))) == 0) {
+		gotfp &= ~(1 << CpDFP);
+		print("fpon: no double FP coprocessor\n");
+	}
+	if (!gotfp) {
+		print("fpon: no FP coprocessors\n");
+		m->havefpvalid = 1;
+		return 0;
+	}
+	m->fpon = 1;			/* don't panic */
+	sid = fprd(Fpsid);
+	m->fpon = 0;
+	switch((sid >> 16) & MASK(7)){
+	case 0:				/* VFPv1 */
+		break;
+	case 1:				/* VFPv2 */
+		m->havefp = VFPv2;
+		m->fpnregs = 16;
+		break;
+	default:			/* VFPv3 or later */
+		m->havefp = VFPv3;
+		m->fpnregs = (acc & Cpaccd16) ? 16 : 32;
+		break;
+	}
+	if (m->machno == 0)
+		print("fp: %d registers, %s simd\n", m->fpnregs,
+			(acc & Cpaccnosimd? " no": ""));
+	m->havefpvalid = 1;
+	return 1;
+}
+
+/*
+ * these can be called to turn the fpu on or off for user procs,
+ * not just at system start up or shutdown.
+ */
+
+void
+fpoff(void)
+{
+	if (m->fpon) {
+		fpwr(Fpexc, 0);
+		m->fpon = 0;
+	}
+}
+
+void
+fpononly(void)
+{
+	if (!m->fpon && havefp()) {
+		/* enable fp.  must be first operation on the FPUs. */
+		fpwr(Fpexc, Fpenabled);
+		m->fpon = 1;
+	}
+}
+
+static void
+fpcfg(void)
+{
+	int impl;
+	ulong sid;
+	static int printed;
+
+	/* clear pending exceptions; no traps in vfp3; all v7 ops are scalar */
+	m->fpscr = Dn | FPRNR | (FPINVAL | FPZDIV | FPOVFL) & ~Alltraps;
+	/* VFPv2 needs software support for underflows, so force them to zero */
+	if(m->havefp == VFPv2)
+		m->fpscr |= Fz;
+	fpwr(Fpscr, m->fpscr);
+	m->fpconfiged = 1;
+
+	if (printed)
+		return;
+	sid = fprd(Fpsid);
+	impl = sid >> 24;
+	print("fp: %s arch %s; rev %ld\n", implement(impl),
+		subarch(impl, (sid >> 16) & MASK(7)), sid & MASK(4));
+	printed = 1;
+}
+
+void
+fpinit(void)
+{
+	if (havefp()) {
+		fpononly();
+		fpcfg();
+	}
+}
+
+void
+fpon(void)
+{
+	if (havefp()) {
+	 	fpononly();
+		if (m->fpconfiged)
+			fpwr(Fpscr, (fprd(Fpscr) & Allcc) | m->fpscr);
+		else
+			fpcfg();	/* 1st time on this fpu; configure it */
+	}
+}
+
+void
+fpclear(void)
+{
+//	ulong scr;
+
+	fpon();
+//	scr = fprd(Fpscr);
+//	m->fpscr = scr & ~Allexc;
+//	fpwr(Fpscr, m->fpscr);
+
+	fpwr(Fpexc, fprd(Fpexc) & ~Fpmbc);
+}
+
+FPalloc*
+fpalloc(void)
+{
+	FPalloc *f;
+	while((f = mallocalign(sizeof(FPalloc), 16, 0, 0)) == nil){
+		int x = spllo();
+		if(!waserror()){
+			resrcwait("no memory for FPalloc");
+			poperror();
+		}
+		splx(x);
+	}
+	return f;
+}
+
+/*
+ * Called when a note is about to be delivered to a
+ * user process, usually at the end of a system call.
+ * Note handlers are not allowed to use the FPU so
+ * the state is marked (after saving if necessary) and
+ * checked in the Device Not Available handler.
+ */
+void
+fpunotify(Proc *p)
+{
+	if(p->fpstate == FPactive){
+		fpsave(p->fpsave);
+		p->fpstate = p->fpsave->fpstate = FPinactive;
+	}
+	p->fpstate |= FPnotify;
+}
+
+/*
+ * Called from sysnoted() via the machine-dependent
+ * noted() routine.
+ * Clear the flag set above in fpunotify().
+ */
+void
+fpunoted(Proc *p)
+{
+	if(p->fpstate & FPnotify){
+		p->fpstate &= ~FPnotify;
+	} else {
+		FPalloc *o;
+
+		if(p->fpstate == FPactive)
+			fpoff();
+		if((o = p->ofpsave) != nil) {
+			p->ofpsave = nil;
+			free(p->fpsave);
+			p->fpsave = o;
+			p->fpstate = o->fpstate;
+		} else {
+			p->fpstate = FPinit;
+		}
+	}
+}
+
+FPsave*
+notefpsave(Proc *p)
+{
+	switch(p->fpstate){
+	case FPinactive|FPnotify:
+	case FPemu|FPnotify:
+		p->ofpsave = fpalloc();
+		memmove(p->ofpsave, p->fpsave, sizeof(FPalloc));
+		p->fpstate &= ~FPnotify;
+	}
+	return p->ofpsave;
+}
+
+/* should only be called if p->fpstate == FPactive */
+void
+fpsave(FPsave *fps)
+{
+	int n;
+
+	fpon();
+	fps->control = fps->status = fprd(Fpscr);
+	assert(m->fpnregs);
+	for (n = 0; n < m->fpnregs; n++)
+		fpsavereg(n, (uvlong *)fps->regs[n]);
+	fpoff();
+}
+
+static void
+fprestore(Proc *p)
+{
+	int n;
+
+	fpon();
+	fpwr(Fpscr, p->fpsave->control);
+	m->fpscr = fprd(Fpscr) & ~Allcc;
+	assert(m->fpnregs);
+	for (n = 0; n < m->fpnregs; n++)
+		fprestreg(n, *(uvlong *)p->fpsave->regs[n]);
+}
+
+/*
+ * Called from sched() and sleep() via the machine-dependent
+ * procsave() routine.
+ * About to go in to the scheduler.
+ * If the process wasn't using the FPU
+ * there's nothing to do.
+ */
+void
+fpuprocsave(Proc *p)
+{
+	if(p->state == Moribund){
+		if(p->fpstate == FPactive)
+			fpoff();
+		p->fpstate = FPinit;
+		if(p->fpsave != nil){
+			free(p->fpsave);
+			p->fpsave = nil;
+		}
+		if(p->ofpsave != nil){
+			free(p->ofpsave);
+			p->ofpsave = nil;
+		}
+		return;
+	}
+	if(p->fpstate == FPactive){
+		fpsave(p->fpsave);
+		p->fpstate = p->fpsave->fpstate = FPinactive;
+	}
+}
+
+/*
+ * The process has been rescheduled and is about to run.
+ * Nothing to do here right now. If the process tries to use
+ * the FPU again it will cause a Device Not Available
+ * exception and the state will then be restored.
+ */
+void
+fpuprocrestore(Proc *)
+{
+}
+
+/*
+ * The current process has been forked,
+ * save and copy neccesary state to child.
+ */
+void
+fpuprocfork(Proc *p)
+{
+	int s;
+
+	s = splhi();
+	switch(up->fpstate & ~FPnotify){
+	case FPactive:
+		fpsave(up->fpsave);
+		up->fpstate = up->fpsave->fpstate = FPinactive;
+		/* no break */
+	case FPinactive:
+	case FPemu:
+		if(p->fpsave == nil)
+			p->fpsave = fpalloc();
+		memmove(p->fpsave, up->fpsave, sizeof(FPalloc));
+		p->fpstate = up->fpsave->fpstate;
+	}
+	splx(s);
+}
+
+/*
+ * Disable the FPU.
+ * Called from sysexec() via sysprocsetup() to
+ * set the FPU for the new process.
+ */
+void
+fpusysprocsetup(Proc *p)
+{
+	int s;
+
+	s = splhi();
+	p->fpstate = FPinit;
+	fpoff();
+	splx(s);
+
+	if(p->fpsave != nil){
+		free(p->fpsave);
+		p->fpsave = nil;
+	}
+	if(p->ofpsave != nil){
+		free(p->ofpsave);
+		p->ofpsave = nil;
+	}
+}
+
+static void
+mathnote(void)
+{
+	ulong status;
+	char *msg, note[ERRMAX];
+
+	status = up->fpsave->status;
+
+	/*
+	 * Some attention should probably be paid here to the
+	 * exception masks and error summary.
+	 */
+	if (status & FPAINEX)
+		msg = "inexact";
+	else if (status & FPAOVFL)
+		msg = "overflow";
+	else if (status & FPAUNFL)
+		msg = "underflow";
+	else if (status & FPAZDIV)
+		msg = "divide by zero";
+	else if (status & FPAINVAL)
+		msg = "bad operation";
+	else
+		msg = "spurious";
+	snprint(note, sizeof note, "sys: fp: %s fppc=%#p status=%#lux",
+		msg, up->fpsave->pc, status);
+	postnote(up, 1, note, NDebug);
+}
+
+static void
+mathemu(Ureg *)
+{
+	switch(up->fpstate){
+	case FPemu:
+	case FPemu|FPnotify:
+		error("illegal instruction: VFP opcode in emulated mode");
+	case FPinit:
+	case FPinit|FPnotify:
+		if(up->fpsave == nil)
+			up->fpsave = fpalloc();
+		fpinit();
+		up->fpstate = FPactive;
+		break;
+	case FPinactive|FPnotify:
+		spllo();
+		qlock(&up->debug);
+		notefpsave(up);
+		qunlock(&up->debug);
+		splhi();
+		/* wet floor */
+	case FPinactive:
+		/*
+		 * Before restoring the state, check for any pending
+		 * exceptions.  There's no way to restore the state without
+		 * generating an unmasked exception.
+		 * More attention should probably be paid here to the
+		 * exception masks and error summary.
+		 */
+		if(up->fpsave->status & (FPAINEX|FPAUNFL|FPAOVFL|FPAZDIV|FPAINVAL)){
+			mathnote();
+			break;
+		}
+		fprestore(up);
+		up->fpstate = FPactive;
+		break;
+	case FPactive:
+		error("illegal instruction: bad vfp fpu opcode");
+		break;
+	}
+	fpclear();
+}
+
+void
+fpstuck(uintptr pc)
+{
+	if (m->fppc == pc && m->fppid == up->pid) {
+		m->fpcnt++;
+		if (m->fpcnt > 4)
+			panic("fpuemu: cpu%d stuck at pid %ld %s pc %#p "
+				"instr %#8.8lux", m->machno, up->pid, up->text,
+				pc, *(ulong *)pc);
+	} else {
+		m->fppid = up->pid;
+		m->fppc = pc;
+		m->fpcnt = 0;
+	}
+}
+
+enum {
+	N = 1<<31,
+	Z = 1<<30,
+	C = 1<<29,
+	V = 1<<28,
+	REGPC = 15,
+};
+
+static int
+condok(int cc, int c)
+{
+	switch(c){
+	case 0:	/* Z set */
+		return cc&Z;
+	case 1:	/* Z clear */
+		return (cc&Z) == 0;
+	case 2:	/* C set */
+		return cc&C;
+	case 3:	/* C clear */
+		return (cc&C) == 0;
+	case 4:	/* N set */
+		return cc&N;
+	case 5:	/* N clear */
+		return (cc&N) == 0;
+	case 6:	/* V set */
+		return cc&V;
+	case 7:	/* V clear */
+		return (cc&V) == 0;
+	case 8:	/* C set and Z clear */
+		return cc&C && (cc&Z) == 0;
+	case 9:	/* C clear or Z set */
+		return (cc&C) == 0 || cc&Z;
+	case 10:	/* N set and V set, or N clear and V clear */
+		return (~cc&(N|V))==0 || (cc&(N|V)) == 0;
+	case 11:	/* N set and V clear, or N clear and V set */
+		return (cc&(N|V))==N || (cc&(N|V))==V;
+	case 12:	/* Z clear, and either N set and V set or N clear and V clear */
+		return (cc&Z) == 0 && ((~cc&(N|V))==0 || (cc&(N|V))==0);
+	case 13:	/* Z set, or N set and V clear or N clear and V set */
+		return (cc&Z) || (cc&(N|V))==N || (cc&(N|V))==V;
+	case 14:	/* always */
+		return 1;
+	case 15:	/* never (reserved) */
+		return 0;
+	}
+	return 0;	/* not reached */
+}
+
+/* only called to deal with user-mode instruction faults */
+int
+fpuemu(Ureg* ureg)
+{
+	int s, nfp, cop, op;
+	uintptr pc;
+	ulong inst;
+
+	if(waserror()){
+		postnote(up, 1, up->errstr, NDebug);
+		return 1;
+	}
+
+	nfp = 0;
+	pc = ureg->pc;
+	validaddr(pc, 4, 0);
+	inst = *(ulong*)pc;
+	op  = (inst >> 24) & MASK(4);
+	cop = (inst >>  8) & MASK(4);
+	if(m->fpon)
+		fpstuck(pc);		/* debugging; could move down 1 line */
+	if (ISFPAOP(cop, op)) {		/* old arm 7500 fpa opcode? */
+		s = spllo();
+		if(waserror()){
+			splx(s);
+			nexterror();
+		}
+		nfp = fpiarm(ureg);	/* advances pc past emulated instr(s) */
+		if (nfp > 1)		/* could adjust this threshold */
+			m->fppc = m->fpcnt = 0;
+		splx(s);
+		poperror();
+	} else if (ISVFPOP(cop, op)) {	/* if vfp, fpu off or unsupported instruction */
+		mathemu(ureg);		/* enable fpu & retry */
+		nfp = 1;
+	} else if ((inst & 0xffffff80) == 0xf57ff000){
+		/* barriers, clrex */
+		ureg->pc += 4;
+		nfp = 1;
+	}
+
+	poperror();
+	return nfp;
+}

@@ -1,0 +1,10 @@
+</$objtype/mkfile
+
+TEST=\
+	date\
+	patch\
+	ramfs\
+	test\
+	zones\
+
+</sys/src/cmd/mktest

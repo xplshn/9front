@@ -1,0 +1,11 @@
+</$objtype/mkfile
+
+TARG=marshal
+LIB=../common/libcommon.a$O
+OFILES=marshal.$O
+HFILES=../common/common.h
+
+</sys/src/cmd/mkone
+<../mkupas
+CFLAGS=$CFLAGS -I../common
+

@@ -1,0 +1,80 @@
+#!/bin/rc -b
+# grabrfc - copy new rfcs into /lib/rfc
+# grabrfc -d - copy draft rfcs as well
+rfork en
+path=(/bin)
+fn cd
+
+flagfmt='d:drafts'
+eval `''{aux/getflags $*} || exec aux/usage
+
+dom=`{ndb/query sys $sysname dom}
+if(~ $dom '') dom=$sysname
+
+ftpfs -q/ -a $user@$dom ftp.rfc-editor.org
+
+found=no
+LIB=/lib/rfc
+cd /n/ftp/in-notes
+fn cprfc {
+		f=$1
+		shift
+}
+
+for(i in rfc*.txt){
+	target=`{
+		echo $i | sed '
+			s/.txt$//
+			s/rfc0*/rfc/'
+	}
+	if(test ! -e $LIB/$target && test -f $i){
+		cp $i $LIB/$target
+		chmod 664 $LIB/$target
+		found=yes
+		echo $target
+	}
+}
+if (~ $found yes)
+	tr A-Z a-z <rfc-index.txt | sed 's/^0*//' |
+		sed 's/^[0-9]/rfc&/' >$LIB/index
+unmount /n/ftp
+
+if (~ $drafts '')
+	exit
+
+ftpfs -q/ -a $user@$dom ftp.math.utah.edu
+
+# copy in new ones
+found=no
+LIB=/lib/rfc/drafts
+mkdir -p $LIB
+cd /n/ftp/pub/mirrors/ftp.ietf.org/internet-drafts
+for(i in draft-*.txt){
+	target=`{
+		echo $i | sed '
+			s/.txt$//
+			s/draft-//'
+	}
+	if (test ! -e $LIB/$target && test -f $i &&
+	    test `{ls -s $i | sed 's/ .*//'} -ge 2){
+			cp $i $LIB/$target
+			chmod 664 $LIB/$target
+			found=yes
+			echo drafts/$target
+	}
+}
+if (~ $found yes) {
+	if (test -f 1id-index.txt)
+		<1id-index.txt sed '
+			s/\.txt//
+			s/draft-//' > $LIB/index
+	if not
+		>[1=2] echo no draft index found
+	if (test -f 1id-abstracts.txt)
+		<1id-abstracts.txt sed '
+			s/\.txt//
+			s/draft-//' > $LIB/abstracts
+	if not
+		>[1=2] echo no abstracts found
+}
+unmount /n/ftp

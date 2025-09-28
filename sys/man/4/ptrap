@@ -1,0 +1,83 @@
+.TH PTRAP 4
+.SH NAME
+ptrap \-
+.IR plumber (4)
+filter
+.SH SYNOPSIS
+.B ptrap
+.I port
+[\fB!\fR]\fIregexp\fR
+[ +\fIattr\fR [\fB!\fR]\fIregexp\fR ... ] ...
+.SH DESCRIPTION
+.I Ptrap
+is a program that mounts itself over a
+.IR plumber (4)
+service mounted at
+.B /mnt/plumb
+and filters incoming messages according to the rules provided on the command line.
+.PP
+.I Ptrap
+accepts an arbitrary number of filters;
+each filter applies to a port, and may match over both the data and attributes of plumb messages.
+.PP
+A filter is formatted as a port name, a data filter, and a list of attribute filters.
+.PP
+The data filter is a
+.IR regex (6)
+that matches the plumbed data.
+The attribute filter consists of the attribute name prefixed with a '+', followed by a
+.IR regex (6)
+that matches the contents of the attribute.
+Any regex may be prefixed with a '!' in order to negate a match,
+causing all matches for that regex to be discarded.
+All parts of a filter must match in order for a plumb message to be forwarded.
+.SH EXAMPLES
+Start a 
+.IR sam (1)
+instance dedicated to editing kernel source code:
+.IP
+.EX
+ptrap edit '^/sys/src/9/'
+sam
+.EE
+.PP
+In another window, start a second
+.IR sam (1)
+instance for all other editing jobs:
+.IP
+.EX
+ptrap edit '!^/sys/src/9/'
+sam
+.EE
+.PP
+Start an
+.IR acme (1)
+instance instance dedicated to reading plumbed manual pages:
+.IP
+.EX
+ptrap edit '.*' +action '^showdata' +filename '^/man/'
+acme -c1
+.EE
+.SH SOURCE
+.B /sys/src/cmd/ptrap.c
+.SH SEE ALSO
+.IR plumber (4),
+.IR plumb (6)
+.SH BUGS
+Multiple filters specified on the same port ignore all but the last one.
+.PP
+.I Ptrap
+would be more useful if it could inhibit sending the message to other clients.
+.PP
+As far as
+.IR plumber (4)
+is concerned, even messages dropped by
+.I ptrap
+are "accepted", which means rules that are supposed to apply to messages not accepted by clients are not invoked (e.g. a rule starting an editor if no one is listening to the
+.I edit
+port will not work if there is a
+.I ptrap
+on that port).
+.SH HISTORY
+.I Ptrap
+first appeared in 9front (February, 2018).

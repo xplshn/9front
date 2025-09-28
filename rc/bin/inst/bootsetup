@@ -1,0 +1,143 @@
+#!/bin/rc
+
+# desc: configure hard disk to boot plan 9
+# prereq: copydist
+
+fats=()
+for(i in (/dev/sd*/9fat /dev/sd*/esp)){
+	if(test -f $i)
+		fats=($fats $i)
+}
+
+switch($1) {
+case checkdone checkready
+	if(~ $#fats 0 || ~ $#9fat 1 && ~ `{fstype $9fat} dos && ~ $didbootsetup 1)
+		bootsetup=done
+	if not
+		bootsetup=ready
+	export bootsetup
+
+case go
+	echo
+	echo 'Setup Plan 9 FAT boot partition (9fat)'
+	echo
+
+	if(~ $#fats 1)
+		default=(-d $fats)
+	if not
+		default=()
+	prompt $default 'Plan 9 FAT partition' $fats
+	9fat=$rd
+	export 9fat
+
+	if(~ $#bootfile 1){
+		bootfile=`{basename $bootfile}
+	}
+	if(! ~ $#bootfile 1 || ! test -f /$cputype/$bootfile) {
+		bootfile=()
+	}
+
+	if(! test -f /tmp/plan9.ini) {
+		@{
+			if(~ $#bootfile 1)
+				echo 'bootfile='^$bootfile
+			if(~ $#fs 1)
+				echo 'bootargs=local!'^$fs' '$"fsflags
+			if(~ $#nvram 1)
+				echo 'nvram='^$nvram
+			if(~ $#mouseport 1)
+				echo 'mouseport='^$mouseport
+			if(~ $#monitor 1)
+				echo 'monitor='^$monitor
+			if(~ $#vgasize 1)
+				echo 'vgasize='^$vgasize
+			cd '#ec'
+			for(i in *){
+				echo -n $"i'='
+				cat $i
+				echo
+			} | grep -v '^(\*acpi=0x|\*bootscreen=|\*e820=|apm0=|bootfile=|bootargs=|cdboot=|nvram=|mouseport=|monitor=|vgasize=)'
+		} >/tmp/plan9.ini
+	}
+
+	# clean state
+	rm -f /tmp/oldplan9.ini /tmp/pbs.bak
+	unmount /n/9fat >[2]/dev/null
+
+	if(! test -f /srv/dos)
+		dossrv
+
+	need9fatformat=yes
+	if(~ `{fstype $9fat} dos){
+		if(mount /srv/dos /n/9fat $9fat >[2]/dev/null){
+			if(cp /n/9fat/plan9.ini /tmp/oldplan9.ini >[2]/dev/null)
+				need9fatformat=no
+			unmount /n/9fat >[2]/dev/null
+
+			# make sure dossrv is gone
+			sleep 1
+		}
+	}
+
+	# always make backup of old bootsector
+	logprog dd -bs 512 -count 1 -if $9fat -of /tmp/pbs.bak
+
+	if (! test -f /386/pbs) {
+		if(~ $need9fatformat yes){
+			log Initializing Plan 9 FAT partition.
+			logprog disk/format -r 2 -d -l PLAN9 $9fat
+		}
+	}
+	if not {
+		if(~ $need9fatformat yes){
+			log Initializing Plan 9 FAT partition.
+			logprog disk/format -r 2 -d -b /386/pbs -l PLAN9 $9fat
+		}
+		if not {
+			log Updating bootsector.
+			logprog disk/format -b /386/pbs $9fat
+		}
+	}
+
+	logprog mount -c /srv/dos /n/9fat $9fat
+
+	if(test -f /386/9bootfat) {
+		logprog rm -f /n/9fat/9bootfat
+		logprog cp /386/9bootfat /n/9fat/9bootfat
+
+		# make file continous on disk
+		logprog chmod +al /n/9fat/9bootfat
+	}
+
+	# copy config
+	logprog rm -f /n/9fat/plan9.ini
+	logprog cp /tmp/plan9.ini /n/9fat/plan9.ini
+
+	# copy kernel
+	if(~ $#bootfile 1){
+		logprog rm -f /n/9fat/$bootfile
+		logprog cp /$cputype/$bootfile /n/9fat/$bootfile
+	}
+
+	# copy efi bootloader
+	for(i in /386/*.efi){
+		if(test -f $i) {
+			logprog mkdir -p /n/9fat/efi/boot
+			logprog cp $i /n/9fat/efi/boot/
+		}
+	}
+
+	# copy in backups
+	if(test -f /tmp/oldplan9.ini)
+		logprog cp /tmp/oldplan9.ini /n/9fat
+	if(test -f /tmp/pbs.bak)
+		logprog cp /tmp/pbs.bak /n/9fat
+
+	logprog unmount /n/9fat
+
+	disk=`{basename `{basename -d $9fat}}
+	if(./bootplan9){
+		didbootsetup=1
+		export didbootsetup
+	}
+}

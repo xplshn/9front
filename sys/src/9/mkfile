@@ -1,0 +1,36 @@
+ARCH=\
+	arm64\
+	bcm64\
+	bcm\
+	cycv\
+	imx8\
+	kw\
+	lx2k\
+	mt7688\
+	#mtx\
+	omap\
+	pc64\
+	pc\
+	#ppc\
+	sgi\
+	teg2\
+	xen\
+	zynq\
+
+all:V:
+	for(i in $ARCH)@{
+		cd $i
+		mk
+	}
+
+installall install:V:
+	for(i in $ARCH) @{
+		cd $i
+		mk install
+	}
+
+clean:V:
+	for(i in $ARCH) @{
+		cd $i
+		mk clean
+	}

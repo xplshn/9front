@@ -1,0 +1,42 @@
+</$objtype/mkfile
+
+TARG=awk
+OFILES=re.$O\
+	lex.$O\
+	main.$O\
+	parse.$O\
+	proctab.$O\
+	popen.$O\
+	tran.$O\
+	lib.$O\
+	run.$O\
+	awkgram.$O\
+
+HFILES=awk.h\
+	y.tab.h\
+	proto.h\
+
+YFILES=awkgram.y
+
+BIN=/$objtype/bin
+
+</sys/src/cmd/mkone
+
+y.tab.h awkgram.c:	$YFILES
+	$YACC -o awkgram.c $YFLAGS $prereq
+
+clean:V:
+	rm -f *.[$OS] [$OS].out *.maketab y.tab.? y.debug y.output $TARG
+
+nuke:V:
+	rm -f *.[$OS] [$OS].out *.maketab y.tab.? y.debug y.output awkgram.c proctab.c $TARG
+
+proctab.c:	$cputype.maketab
+	./$cputype.maketab >proctab.c
+
+$cputype.maketab:	y.tab.h maketab.c
+	objtype=$cputype mk maketab.$cputype
+
+maketab.$objtype:V:
+	$CC $CFLAGS maketab.c
+	$LD $LDFLAGS -o $objtype.maketab maketab.$O

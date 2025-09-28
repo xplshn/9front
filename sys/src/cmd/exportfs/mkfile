@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+TARG=exportfs
+OFILES=\
+	exportsrv.$O\
+	pattern.$O\
+	io.$O\
+
+HFILES=exportfs.h\
+
+BIN=/$objtype/bin
+
+</sys/src/cmd/mkmany

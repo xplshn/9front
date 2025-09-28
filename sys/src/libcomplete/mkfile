@@ -1,0 +1,9 @@
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libcomplete.a
+OFILES=\
+	complete.$O\
+
+HFILES=/sys/include/complete.h
+
+</sys/src/cmd/mksyslib

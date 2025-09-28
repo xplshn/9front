@@ -1,0 +1,20 @@
+</$objtype/mkfile
+
+TARG=\
+	scanmail\
+	testscan
+
+LIB=../common/libcommon.a$O
+
+OFILES=common.$O
+
+HFILES=\
+	spam.h\
+	../common/sys.h\
+
+</sys/src/cmd/mkmany
+<../mkupas
+CFLAGS=$CFLAGS -I../common
+
+scanmail.$O: scanmail.c
+	$CC $CFLAGS scanmail.c

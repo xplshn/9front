@@ -1,0 +1,13 @@
+</$objtype/mkfile
+
+TARG=expect\
+	pass\
+	drain\
+	at\
+
+OFILES=
+
+BIN=/$objtype/bin/dial
+
+</sys/src/cmd/mkmany
+

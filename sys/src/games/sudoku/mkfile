@@ -1,0 +1,12 @@
+</$objtype/mkfile
+BIN=/$objtype/bin/games
+
+TARG=sudoku
+OFILES=\
+	sudoku.$O\
+	levels.$O\
+	game.$O\
+
+HFILES=sudoku.h\
+
+</sys/src/cmd/mkone

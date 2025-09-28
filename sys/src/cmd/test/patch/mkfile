@@ -1,0 +1,9 @@
+</$objtype/mkfile
+
+TEST=patch
+
+CLEANFILES=\
+	multifile.1.in.tmp\
+	multifile.2.in.tmp\
+
+</sys/src/cmd/mktest

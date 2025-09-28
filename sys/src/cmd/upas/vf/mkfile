@@ -1,0 +1,12 @@
+</$objtype/mkfile
+
+TARG=vf
+LIB=../common/libcommon.a$O
+OFILES=vf.$O
+HFILES=\
+	../common/common.h\
+	../common/sys.h\
+
+</sys/src/cmd/mkone
+<../mkupas
+CFLAGS=$CFLAGS -I../common

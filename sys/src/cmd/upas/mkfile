@@ -1,0 +1,56 @@
+</$objtype/mkfile
+
+LIBS=common
+PROGS=\
+	Mail\
+	alias\
+	bayes\
+	binscripts\
+	dkim\
+	filterkit\
+	fs\
+	imap4d\
+	marshal\
+	ml\
+	ned\
+	pop3\
+	q\
+	scanmail\
+	send\
+	smtp\
+	spf\
+	unesc\
+	vf\
+
+#libs must be made first
+DIRS=$LIBS $PROGS
+
+default:V:
+	mk all
+
+all install installall clean nuke:V:
+	for (i in $DIRS) @{
+		cd $i
+		mk $target
+	}
+
+safeinstallall:V:
+	for (i in $LIBS) @{
+		cd $i
+		mk installall
+	}
+	for (i in $PROGS) @{
+		cd $i
+		mk safeinstallall
+	}
+
+test:V:
+	for (i in $LIBS) @{
+		cd $i
+		mk test
+	}
+	for (i in $PROGS) @{
+		cd $i
+		mk test
+	}
+

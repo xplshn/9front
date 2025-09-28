@@ -1,0 +1,91 @@
+CONF=mtx
+CONFLIST=mtx
+
+objtype=power
+</$objtype/mkfile
+p=9
+
+DEVS=`{rc ../port/mkdevlist $CONF}
+
+PORT=\
+	alarm.$O\
+	alloc.$O\
+	allocb.$O\
+	auth.$O\
+	cache.$O\
+	chan.$O\
+	dev.$O\
+	edf.$O\
+	fault.$O\
+	iomap.$O\
+	log.$O\
+	mul64fract.$O\
+	rebootcmd.$O\
+	page.$O\
+	parse.$O\
+	pgrp.$O\
+	portclock.$O\
+	print.$O\
+	proc.$O\
+	qio.$O\
+	qlock.$O\
+	rdb.$O\
+	segment.$O\
+	sysfile.$O\
+	sysproc.$O\
+	taslock.$O\
+	tod.$O\
+	xalloc.$O\
+	random.$O\
+	userinit.$O\
+
+OBJ=\
+	l.$O\
+	inb.$O\
+	clock.$O\
+	i8259.$O\
+	main.$O\
+	mmu.$O\
+	raven.$O\
+	trap.$O\
+	$CONF.root.$O\
+	$CONF.rootc.$O\
+	$DEVS\
+	$PORT\
+
+LIB=\
+	/$objtype/lib/libmemlayer.a\
+	/$objtype/lib/libmemdraw.a\
+	/$objtype/lib/libdraw.a\
+	/$objtype/lib/libip.a\
+	/$objtype/lib/libc.a\
+	/$objtype/lib/libsec.a\
+
+ETHER=`{echo devether.c ether*.c | sed 's/\.c/.'$O'/g'}
+VGA=`{echo devvga.c screen.c vga*.c | sed 's/\.c/.'$O'/g'}
+SDEV=`{echo devsd.c sd*.c | sed 's/\.c/.'$O'/g'}
+
+loadaddr = 0x80004020
+
+$p$CONF:	$OBJ $CONF.$O $LIB
+	$LD -R4 -o $target -T$loadaddr -l $prereq
+	ls -l $target
+
+install:V: $p$CONF
+	cp $p$CONF /$objtype/$p$CONF
+
+<../boot/bootmkfile
+<../port/portmkfile
+<|../port/mkbootrules $CONF
+
+clock.$O:	/$objtype/include/ureg.h
+devether.$O:	/$objtype/include/ureg.h
+main.$O:	/$objtype/include/ureg.h errstr.h
+trap.$O:	/$objtype/include/ureg.h /sys/include/tos.h
+
+$ETHER: 	../port/etherif.h ../port/netif.h
+
+initcode.$O:	initcode /sys/src/libc/9syscall/sys.h
+	$AS initcode
+initcode.out:		initcode.$O
+	$LD -l -R4 -s -o $target $prereq

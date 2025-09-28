@@ -1,0 +1,46 @@
+</$objtype/mkfile
+
+TARG=troff
+OFILES=n1.$O\
+	n2.$O\
+	n3.$O\
+	n4.$O\
+	n5.$O\
+	t6.$O\
+	n6.$O\
+	n7.$O\
+	n8.$O\
+	n9.$O\
+	t10.$O\
+	n10.$O\
+	t11.$O\
+	ni.$O\
+	hytab.$O\
+	suftab.$O\
+	dwbinit.$O\
+	mbwc.$O\
+	popen.$O\
+	system.$O\
+	space.$O\
+
+HFILES=tdef.h\
+	fns.h\
+	ext.h\
+	dwbinit.h\
+
+BIN=/$objtype/bin
+</sys/src/cmd/mkone
+CFLAGS=-FTVw -DUNICODE
+
+TMACDIR='"sys/lib/tmac/tmac."'
+FONTDIR="sys/lib/troff/font"
+NTERMDIR='"sys/lib/troff/term/tab."'
+
+$O.out:	$OFILES $LIB
+	$LD -o $target $prereq
+
+ni.$O:	ni.c $HFILES
+	$CC $CFLAGS -DTMACDIR'='$TMACDIR ni.c
+
+n1.$O:	n1.c $HFILES
+	$CC $CFLAGS -DFONTDIR'='$FONTDIR -DNTERMDIR'='$NTERMDIR n1.c

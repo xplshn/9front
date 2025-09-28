@@ -1,0 +1,27 @@
+ARCH=\
+	bcm\
+	bitsy\
+	efi\
+	honeycomb\
+	pc\
+	qemu\
+	reform\
+	zynq\
+
+all:V:
+	for(i in $ARCH)@{
+		cd $i
+		mk
+	}
+
+installall install:V:
+	for(i in $ARCH) @{
+		cd $i
+		mk install
+	}
+
+clean:V:
+	for(i in $ARCH) @{
+		cd $i
+		mk clean
+	}

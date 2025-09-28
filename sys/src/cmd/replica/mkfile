@@ -1,0 +1,34 @@
+</$objtype/mkfile
+
+SCRIPTS=\
+	changes\
+	pull\
+	push\
+	scan\
+	setupdirs\
+	
+TARG=\
+	applychanges\
+	applylog\
+	compactdb\
+	updatedb\
+
+OFILES=\
+	db.$O\
+	util.$O\
+
+HFILES=all.h
+
+BIN=/$objtype/bin/replica
+</sys/src/cmd/mkmany
+
+$O.applychanges: revproto.$O
+
+${SCRIPTS:%=$BIN/%}:
+	for(i in $target){
+		echo '#!/bin/rc'
+		echo 'exec /rc/bin/replica/'^`{basename $i}^' $*'
+	} >$i
+	chmod +x $target
+
+install:V: ${TARG:%=$BIN/%} ${SCRIPTS:%=$BIN/%}

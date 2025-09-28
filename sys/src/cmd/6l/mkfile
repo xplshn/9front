@@ -1,0 +1,28 @@
+</$objtype/mkfile
+
+BIN=/$objtype/bin
+TARG=6l
+OFILES=\
+	asm.$O\
+	obj.$O\
+	optab.$O\
+	pass.$O\
+	span.$O\
+	list.$O\
+	enam.$O\
+	compat.$O\
+
+HFILES=\
+	l.h\
+	../6c/6.out.h\
+
+
+</sys/src/cmd/mkone
+
+../6c/enam.c: ../6c/6.out.h
+	@ { cd ../6c; mk enam.c }
+
+enam.$O:	../6c/enam.c
+	$CC $CFLAGS ../6c/enam.c
+
+compat.$O:	../cc/compat

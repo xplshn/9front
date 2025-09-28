@@ -1,0 +1,15 @@
+</$objtype/mkfile
+
+TARG=\
+	qer\
+	runq\
+
+LIB=../common/libcommon.a$O
+OFILES=
+HFILES=\
+	../common/common.h\
+	../common/sys.h\
+
+</sys/src/cmd/mkmany
+<../mkupas
+CFLAGS=$CFLAGS -I../common

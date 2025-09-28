@@ -1,0 +1,193 @@
+// ARM64 support
+
+defn acidinit()			// Called after all the init modules are loaded
+{
+	bplist = {};
+	bpfmt = 'Y';
+	wplist = {};
+	wpflush();
+
+	srcpath = {
+		"./",
+		"/sys/src/libc/port/",
+		"/sys/src/libc/9sys/",
+		"/sys/src/libc/arm64/"
+	};
+
+	srcfiles = {};			// list of loaded files
+	srctext = {};			// the text of the files
+}
+
+defn linkreg(addr)
+{
+	return *R30;
+}
+
+defn stk()				// trace
+{
+	_stk(*PC, *SP, linkreg(0), 0);
+}
+
+defn lstk()				// trace with locals
+{
+	_stk(*PC, *SP, linkreg(0), 1);
+}
+
+defn gpr()			// print general purpose registers
+{
+	print("R0\t", *R0, " R1\t", *R1, " R2\t", *R2, "\n");
+	print("R3\t", *R3, " R4\t", *R4, " R5\t", *R5, "\n");
+	print("R6\t", *R6, " R7\t", *R7, " R8\t", *R8, "\n");
+	print("R9\t", *R9, " R10\t", *R10, " R11\t", *R11, "\n");
+	print("R12\t", *R12, " R13\t", *R13, " R14\t", *R14, "\n");
+	print("R15\t", *R15, " R16\t", *R16, " R17\t", *R17, "\n");
+	print("R18\t", *R18, " R19\t", *R19, " R20\t", *R20, "\n");
+	print("R21\t", *R21, " R22\t", *R22, " R23\t", *R23, "\n");
+	print("R24\t", *R24, " R25\t", *R25, " R26\t", *R26, "\n");
+	print("R27\t", *R27, " R28\t", *R28, " R29\t", *R29, "\n");
+	print("R30\t", *R30, "\n");
+}
+
+defn fprF()
+{
+	print("FPSR  ", *FPSR, "   FPCR  ", *FPCR, "\n");
+	print("F0\t", *F0, " F1\t", *F1, " F2\t", *F2, "\n");
+	print("F3\t", *F3, " F4\t", *F4, " F5\t", *F5, "\n");
+	print("F6\t", *F6, " F7\t", *F7, " F8\t", *F8, "\n");
+	print("F9\t", *F9, " F10\t", *F10, " F11\t", *F11, "\n");
+	print("F12\t", *F12, " F13\t", *F13, " F14\t", *F14, "\n");
+	print("F15\t", *F15, " F16\t", *F16, " F17\t", *F17, "\n");
+	print("F18\t", *F18, " F19\t", *F19, " F20\t", *F20, "\n");
+	print("F21\t", *F21, " F22\t", *F22, " F23\t", *F23, "\n");
+	print("F24\t", *F24, " F25\t", *F25, " F26\t", *F26, "\n");
+	print("F27\t", *F27, " F28\t", *F28, " F29\t", *F29, "\n");
+	print("F30\t", *F30, " F31\t", *F31, "\n");
+}
+
+defn fprf()
+{
+	print("FPSR  ", *FPSR, "   FPCR  ", *FPCR, "\n");
+	print("f0\t", *f0, " f1\t", *f1, " f2\t", *f2, "\n");
+	print("f3\t", *f3, " f4\t", *f4, " f5\t", *f5, "\n");
+	print("f6\t", *f6, " f7\t", *f7, " f8\t", *f8, "\n");
+	print("f9\t", *f9, " f10\t", *f10, " f11\t", *f11, "\n");
+	print("f12\t", *f12, " f13\t", *f13, " f14\t", *f14, "\n");
+	print("f15\t", *f15, " f16\t", *f16, " f17\t", *f17, "\n");
+	print("f18\t", *f18, " f19\t", *f19, " f20\t", *f20, "\n");
+	print("f21\t", *f21, " f22\t", *f22, " f23\t", *f23, "\n");
+	print("f24\t", *f24, " f25\t", *f25, " f26\t", *f26, "\n");
+	print("f27\t", *f27, " f28\t", *f28, " f29\t", *f29, "\n");
+	print("f30\t", *f30, " f31\t", *f31, "\n");
+}
+
+defn fpr()
+{
+	fprF();
+}
+
+defn regs()				// print all registers
+{
+	gpr();
+}
+
+defn pstop(pid)
+{
+	local l;
+	local pc;
+
+	pc = *PC;
+
+	print(pid,": ", reason(*TYPE), "\t");
+	print(fmt(pc, 'a'), "\t", fmt(pc, 'i'), "\n");
+
+	if notes then {
+		if notes[0] != "sys: breakpoint" then {
+			print("Notes pending:\n");
+			l = notes;
+			while l do {
+				print("\t", head l, "\n");
+				l = tail l;
+			}
+		}
+	}
+}
+
+sizeofUreg = 272;
+aggr Ureg
+{
+	'W' 0 r0;
+	'W' 8 r1;
+	'W' 16 r2;
+	'W' 24 r3;
+	'W' 32 r4;
+	'W' 40 r5;
+	'W' 48 r6;
+	'W' 56 r7;
+	'W' 64 r8;
+	'W' 72 r9;
+	'W' 80 r10;
+	'W' 88 r11;
+	'W' 96 r12;
+	'W' 104 r13;
+	'W' 112 r14;
+	'W' 120 r15;
+	'W' 128 r16;
+	'W' 136 r17;
+	'W' 144 r18;
+	'W' 152 r19;
+	'W' 160 r20;
+	'W' 168 r21;
+	'W' 176 r22;
+	'W' 184 r23;
+	'W' 192 r24;
+	'W' 200 r25;
+	'W' 208 r26;
+	'W' 216 r27;
+	'W' 224 r28;
+	'W' 232 r29;
+	'W' 240 r30;
+	'W' 248 type;
+	'W' 256 psr;
+	'W' 264 pc;
+};
+
+defn
+Ureg(addr) {
+	complex Ureg addr;
+	print("	r0	", addr.r0, "\n");
+	print("	r1	", addr.r1, "\n");
+	print("	r2	", addr.r2, "\n");
+	print("	r3	", addr.r3, "\n");
+	print("	r4	", addr.r4, "\n");
+	print("	r5	", addr.r5, "\n");
+	print("	r6	", addr.r6, "\n");
+	print("	r7	", addr.r7, "\n");
+	print("	r8	", addr.r8, "\n");
+	print("	r9	", addr.r9, "\n");
+	print("	r10	", addr.r10, "\n");
+	print("	r11	", addr.r11, "\n");
+	print("	r12	", addr.r12, "\n");
+	print("	r13	", addr.r13, "\n");
+	print("	r14	", addr.r14, "\n");
+	print("	r15	", addr.r15, "\n");
+	print("	r16	", addr.r16, "\n");
+	print("	r17	", addr.r17, "\n");
+	print("	r18	", addr.r18, "\n");
+	print("	r19	", addr.r19, "\n");
+	print("	r20	", addr.r20, "\n");
+	print("	r21	", addr.r21, "\n");
+	print("	r22	", addr.r22, "\n");
+	print("	r23	", addr.r23, "\n");
+	print("	r24	", addr.r24, "\n");
+	print("	r25	", addr.r25, "\n");
+	print("	r26	", addr.r26, "\n");
+	print("	r27	", addr.r27, "\n");
+	print("	r28	", addr.r28, "\n");
+	print("	r29	", addr.r29, "\n");
+	print("	r30	", addr.r30, "\n");
+	print("	type	", addr.type, "\n");
+	print("	psr	", addr.psr, "\n");
+	print("	pc	", addr.pc, "\n");
+};
+
+print("/sys/lib/acid/arm64");

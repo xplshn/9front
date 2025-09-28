@@ -1,0 +1,58 @@
+.TH ATARI 1
+.SH NAME
+2600 \- emulator
+.SH SYNOPSIS
+.B games/2600
+[
+.B -a
+] [
+.B -x
+.I scale
+]
+.I romfile
+.SH DESCRIPTION
+.I 2600
+is an emulator for the Atari 2600.
+It executes the romfile given as an argument,
+and controls as if using a regular 4-direction 1-button joystick,
+using \fBspace\fR button and directional keys.
+The \fBq\fR, \fBw\fR, \fBe\fR and \fBr\fR keys correspond respectively to the reset, select, player 1 difficulty and color mode switches.
+Other keys:
+.TP
+F1
+Pause the emulator. If already paused it will step one video frame.
+.TP
+F12
+Toggle the emulator's speedometer.  It shows in the upper left,
+off-viewport corner, the ratio between the expected and observed time it
+took to draw 60 frames.
+.TP
+t
+Toggle tracing of the emulator.
+.TP
+`
+It uncaps the 60fps frame rate and lets emulation go as fast as possible.
+.TP
+Esc
+Pause the emulator.
+.TP
+Del
+Exit the emulator.
+.PP
+Command line options:
+.TP
+.B -a
+Enable audio output.
+.TP
+.B -x
+Scale the screen to a given factor regardless of the window's size.
+.PP
+A joystick may be used to play the emulator via
+.IR joy (1).
+.SH SOURCE
+.B /sys/src/games/2600
+.SH BUGS
+Yes.
+.SH HISTORY
+.I 2600
+first appeared in 9front (November, 2014).

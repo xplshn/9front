@@ -1,0 +1,14 @@
+</$objtype/mkfile
+
+BIN=/acme/bin/$objtype
+TARG=Mail
+OFILES=\
+	mbox.$O\
+	mesg.$O\
+	comp.$O\
+	util.$O\
+	win.$O
+
+HFILES=mail.h
+
+</sys/src/cmd/mkone

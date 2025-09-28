@@ -1,0 +1,42 @@
+</$objtype/mkfile
+
+TARG=\
+	smtpd\
+	smtp\
+
+LIB=../common/libcommon.a$O
+OFILES=
+HFILES=\
+	../common/common.h\
+	../common/sys.h\
+	smtpd.h\
+	smtp.h\
+	rfc822.tab.h\
+
+TEST=parsetest
+
+CLEANFILES=rfc822.tab.h rfc822.tab.c smtpd.tab.c
+
+</sys/src/cmd/mkmany
+<../mkupas
+CFLAGS=$CFLAGS -I../common
+
+$O.smtpd:\
+	smtpd.tab.$O\
+	spam.$O\
+	rfc822.tab.$O\
+	greylist.$O\
+
+$O.smtp: rfc822.tab.$O mxdial.$O
+
+smtpd.tab.c: smtpd.y
+	yacc -o xxx smtpd.y
+	sed 's/yy/zz/g' < xxx > $target
+	rm xxx
+
+rfc822.tab.c rfc822.tab.h:D: rfc822.y
+	yacc -d -s rfc822 rfc822.y
+
+$O.parsetest: rfc822.tab.$O
+
+parsetest.$O: rfc822.tab.$O

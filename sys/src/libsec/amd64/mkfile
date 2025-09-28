@@ -1,0 +1,13 @@
+objtype=amd64
+</$objtype/mkfile
+
+LIB=/$objtype/lib/libsec.a
+OFILES=\
+	chachablock.$O\
+	md5block.$O\
+	sha1block.$O\
+	aesni.$O\
+
+HFILES=/sys/include/libsec.h
+
+</sys/src/cmd/mksyslib

@@ -1,0 +1,86 @@
+.TH IO 1
+.SH NAME
+io \- access PC I/O registers
+.SH SYNOPSIS
+.B io
+[
+.B -f
+.I file
+] [
+.B -WLME
+] [
+.B -r
+|
+.B -w
+]
+.I address
+[
+.I value
+] [
+.I mask
+]
+.SH DESCRIPTION
+.I io
+accesses PC I/O space.
+The operation to be performed is selected with
+.B -r
+or
+.B -w
+for reading or writing, respectively.
+When a
+.I mask
+is provided for a read,
+it is applied with a logical
+.B AND
+operation to the value.
+When a
+.I mask
+is provided for a write,
+the set bits in the mask select the bits from
+.I value
+to be modified.
+The default operation size is a byte.
+C style notation for integers (e.g.
+.B 0x42
+or
+.BR 023 )
+is accepted for the
+.IR address ,
+.I value
+and
+.I mask
+parameters.
+.PP
+.TP
+.B  -W
+Perform a word (16 bit) operation.
+.TP
+.B  -L
+Perform a long / double word (32 bit) operation.
+.TP
+.B  -M
+Access a 64 bit wide machine specific register (MSR).
+.TP
+.B  -E
+Access embedded controller space.
+.TP
+.B  -f
+Instead of using
+.B /dev/io*
+as the I/O file depending on the options above,
+use the argument
+.I file
+instead. This can be used,
+for example,
+to access some PCI card
+config space by specifying
+.B /dev/pci/*raw
+as the I/O file.
+.SH SOURCE
+.B /sys/src/cmd/io.c
+.SH SEE ALSO
+.IR seg (1),
+.IR arch (3)
+.SH HISTORY
+.I Io
+first appeared in 9front (April, 2011).
