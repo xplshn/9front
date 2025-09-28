@@ -1,0 +1,37 @@
+name: Sync with git://git.etalabs.net/musl
+
+on:
+  #schedule:
+  #  - cron: '0 0 */3 * *'  # Run every 3 days at midnight
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout GitHub repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: 'master'
+
+    # Add source repo:
+    - name: Add git://git.etalabs.net/musl remote
+      run: |
+        git remote add source git://git.etalabs.net/musl
+
+    - name: Fetch changes from git://git.etalabs.net/musl
+      run: |
+        git fetch source
+
+    - name: Merge changes from git://git.etalabs.net/musl
+      run: |
+        git config user.name '󰬭 [CI] '
+        git config user.email 'action@github.com'
+        git checkout master
+        git merge --allow-unrelated-histories source/master
+
+    - name: Push changes to Mirror
+      run: |
+        git push origin master
