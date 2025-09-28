@@ -1,0 +1,37 @@
+name: Sync with https://github.com/9front/9front
+
+on:
+  #schedule:
+  #  - cron: '0 0 */3 * *'  # Run every 3 days at midnight
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout GitHub repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: 'front'
+
+    # Add source repo:
+    - name: Add https://github.com/9front/9front remote
+      run: |
+        git remote add source https://github.com/9front/9front
+
+    - name: Fetch changes from https://github.com/9front/9front
+      run: |
+        git fetch source
+
+    - name: Merge changes from https://github.com/9front/9front
+      run: |
+        git config user.name '󰬭 [CI] '
+        git config user.email 'action@github.com'
+        git checkout front
+        git merge --allow-unrelated-histories source/front
+
+    - name: Push changes to Mirror
+      run: |
+        git push origin front
