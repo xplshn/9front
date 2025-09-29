@@ -1,4 +1,4 @@
-name: GitLab Dev Patch
+name: Apply Patches (GitLab + shithub)
 
 on:
   schedule:
@@ -8,34 +8,82 @@ on:
 jobs:
   patch:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
+      - name: checkoutRepo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Add remotes
+      - name: applyPatches
+        id: applyPatches
         run: |
-          git remote add gitlab https://gitlab.com/atamariya/plan9front.git
-          git fetch gitlab dev
-          git fetch origin front:front
+          set -eux
 
-      - name: Create patch branch
-        run: |
           git config user.name '󰬭 [CI] '
           git config user.email 'action@github.com'
-          git checkout -B gitlab-merge front
-          git merge --allow-unrelated-histories gitlab/dev || true
-          git push -f origin gitlab-merge
 
-      - name: Open Pull Request
+          prBodyFile=".pr_body.txt"
+          : > "$prBodyFile"
+          echo "Automatic PR bringing latest commits from:" >> "$prBodyFile"
+
+          git fetch origin
+          git checkout master
+          git branch -D patches 2>/dev/null || true
+          git checkout -B patches master
+
+          mergeDirRepo() {
+            dir="$1"
+            repo="$2"
+
+            mkdir -p "$dir"
+
+            tmpBranch="tmpMerge_$(echo "$dir" | tr '/' '_')"
+            git fetch "$repo" master
+            git checkout -B "$tmpBranch" patches
+
+            git read-tree --prefix="$dir"/ -u FETCH_HEAD
+            git commit -m "Subtree merge $repo into $dir" || true
+
+            git checkout patches
+            git merge --allow-unrelated-histories "$tmpBranch" || true
+
+            git branch -D "$tmpBranch"
+
+            echo "* $repo → $dir" >> "$prBodyFile"
+          }
+
+          mergeGitBranch() {
+            remoteRepo="$1"
+            remoteBranch="$2"
+
+            tmpRemote="tmpRemote_$(date +%s%N)"
+            git remote add "$tmpRemote" "$remoteRepo"
+            git fetch "$tmpRemote" "$remoteBranch"
+            git checkout patches
+            git merge --allow-unrelated-histories FETCH_HEAD || true
+            git remote remove "$tmpRemote"
+
+            echo "* $remoteRepo/$remoteBranch → patches" >> "$prBodyFile"
+          }
+
+          # --- shithub patches ---
+          mergeDirRepo ./src/cmd/rio  git://shithub.us/nikita/rio
+          mergeDirRepo ./src/cmd/acme git://shithub.us/nikita/acme
+          mergeDirRepo ./src/cmd/lola git://shithub.us/aap/lola
+
+          # --- branch-to-branch merge ---
+          mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
+
+          git push -f origin patches
+
+          echo "prBody<<EOF" >> "$GITHUB_OUTPUT"
+          cat "$prBodyFile" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: openPullRequest
         uses: peter-evans/create-pull-request@v5
         with:
           base: master
-          branch: gitlab-merge
-          title: "Sync GitLab/dev patches"
-          body: |
-            Automatic PR bringing the latest commits from
-            [gitlab/dev](https://gitlab.com/atamariya/plan9front/-/tree/dev)
-            into **master**.
+          branch: patches
+          title: "Sync patches"
+          body: ${{ steps.applyPatches.outputs.prBody }}
