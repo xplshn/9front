@@ -39,35 +39,39 @@ jobs:
             target="${dir#./}"
             prefix="${dir#./}/"
 
-            mkdir -p "$dir"
-
             tmpBranch="tmpMerge_$(echo "$target" | tr '/' '_')"
             git fetch "$repo" "$branch"
             git checkout -B "$tmpBranch" patches
 
             git read-tree --prefix="$prefix" -u FETCH_HEAD
-            git commit -m "Subtree merge $repo ($branch) into $target" || true
+            if git diff --cached --quiet; then
+              git checkout patches
+              git branch -D "$tmpBranch"
+              return 0
+            fi
+            git commit -m "Subtree merge $repo ($branch) into $target"
+            echo "* $repo/$branch → $target" >> "$prBodyFile"
 
             git checkout patches
-            git merge --allow-unrelated-histories "$tmpBranch" || true
-
+            git merge --allow-unrelated-histories "$tmpBranch"
             git branch -D "$tmpBranch"
-
-            echo "* $repo/$branch → $target" >> "$prBodyFile"
           }
 
           mergeGitBranch() {
             remoteRepo="$1"
             remoteBranch="$2"
 
+            head=$(git rev-parse HEAD)
             tmpRemote="tmpRemote_$(date +%s%N)"
             git remote add "$tmpRemote" "$remoteRepo"
             git fetch "$tmpRemote" "$remoteBranch"
             git checkout patches
             git merge --allow-unrelated-histories FETCH_HEAD || true
             git remote remove "$tmpRemote"
-
-            echo "* $remoteRepo/$remoteBranch → patches" >> "$prBodyFile"
+            newhead=$(git rev-parse HEAD)
+            if [ "$newhead" != "$head" ]; then
+              echo "* $remoteRepo/$remoteBranch → patches" >> "$prBodyFile"
+            fi
           }
 
           # --- patches ---
@@ -78,13 +82,21 @@ jobs:
           # --- branch-to-branch merge ---
           mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
 
+          if ! grep -q '^\*' "$prBodyFile" 2>/dev/null; then
+            echo "No new commits to merge."
+            rm -f "$prBodyFile"
+            exit 0
+          fi
+
           git push -f origin patches
 
           echo "prBody<<EOF" >> "$GITHUB_OUTPUT"
           cat "$prBodyFile" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          rm -f "$prBodyFile"
 
       - name: openPullRequest
+        if: steps.applyPatches.outcome == 'success'
         uses: peter-evans/create-pull-request@v5
         with:
           base: master
