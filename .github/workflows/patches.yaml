@@ -34,34 +34,43 @@ jobs:
           git checkout -B patches master
 
           mergeDirRepo() {
-            dir="$1"
-            repo="$2"
-            branch="$3"; [ -z "$branch" ] && branch="master"
+            dirPath="$1"
+            repoUrl="$2"
+            branchName="$3"; [ -z "$branchName" ] && branchName="master"
 
-            target="${dir#./}"
-            remoteName="remote_$(echo "$target" | tr '/' '_')"
+            targetDir="${dirPath#./}"
+            remoteName="remote_$(echo "$targetDir" | tr '/' '_')"
+            subtreePrefix="${targetDir%/}/"
 
             # Add remote and fetch
-            git remote add "$remoteName" "$repo" 2>/dev/null || true
-            git fetch "$remoteName" "$branch"
+            git remote add "$remoteName" "$repoUrl" 2>/dev/null || true
+            git fetch "$remoteName" "$branchName"
 
-            # Check if there are any changes
-            if git diff --quiet "patches:$dir" "FETCH_HEAD:"; then
-              git remote remove "$remoteName"
-              return 0
+            headBefore=$(git rev-parse HEAD)
+
+            # If directory doesn't exist, use read-tree for initial import
+            if [ ! -d "$targetDir" ]; then
+              git read-tree --prefix="$subtreePrefix" -u FETCH_HEAD
+              if ! git diff --cached --quiet; then
+                git commit -m "Import $repoUrl ($branchName) into $targetDir"
+                prBody="${prBody}* $repoUrl/$branchName → $targetDir"$'\n'
+                hasChanges=true
+              fi
+            else
+              # Directory exists, do proper subtree merge
+              git subtree pull --prefix="$subtreePrefix" "$remoteName" "$branchName" --squash -m "Merge $repoUrl ($branchName) into $targetDir" || {
+                echo "Merge conflict in $targetDir, aborting"
+                git merge --abort 2>/dev/null || true
+                git remote remove "$remoteName"
+                return 1
+              }
+              
+              headAfter=$(git rev-parse HEAD)
+              if [ "$headAfter" != "$headBefore" ]; then
+                prBody="${prBody}* $repoUrl/$branchName → $targetDir"$'\n'
+                hasChanges=true
+              fi
             fi
-
-            # Perform subtree merge
-            git merge -s subtree --no-commit --allow-unrelated-histories "FETCH_HEAD" || {
-              # If conflicts, abort and report
-              git merge --abort
-              git remote remove "$remoteName"
-              return 1
-            }
-
-            git commit -m "Merge $repo ($branch) into $target" || true
-            prBody="${prBody}* $repo/$branch → $target"$'\n'
-            hasChanges=true
 
             git remote remove "$remoteName"
           }
@@ -70,7 +79,7 @@ jobs:
             remoteRepo="$1"
             remoteBranch="$2"
 
-            head=$(git rev-parse HEAD)
+            headBefore=$(git rev-parse HEAD)
             tmpRemote="tmpRemote_$(date +%s%N)"
             
             git remote add "$tmpRemote" "$remoteRepo"
@@ -82,8 +91,8 @@ jobs:
             }
             git remote remove "$tmpRemote"
             
-            newhead=$(git rev-parse HEAD)
-            if [ "$newhead" != "$head" ]; then
+            headAfter=$(git rev-parse HEAD)
+            if [ "$headAfter" != "$headBefore" ]; then
               prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
               hasChanges=true
             fi
@@ -96,7 +105,7 @@ jobs:
           mergeDirRepo ./src/cmd/acme git://shithub.us/nikita/acme front
           mergeDirRepo ./src/cmd/lola git://shithub.us/aap/lola    front
 
-          # --- branch-to-branch merge ---
+          # --- branch-to-branch merge (ephemeral, no persistent gitlab branch) ---
           mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
 
           if [ "$hasChanges" = false ]; then
@@ -105,6 +114,7 @@ jobs:
             exit 0
           fi
 
+          # Export PR body for the next step
           {
             echo "prBody<<EOF"
             echo "$prBody"
@@ -123,4 +133,3 @@ jobs:
           branch: patches
           title: "Sync patches"
           body: ${{ steps.applyPatches.outputs.prBody }}
-          token: ${{ secrets.GITHUB_TOKEN }}
