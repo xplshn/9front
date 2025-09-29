@@ -19,15 +19,17 @@ jobs:
         run: |
           set -e
 
-          git config user.name '󰬭 [CI] '
+          git config user.name '󰬭 [CI] '
           git config user.email 'action@github.com'
 
-          prBodyFile=".pr_body.txt"
-          : > "$prBodyFile"
-          echo "Automatic PR bringing latest commits from:" >> "$prBodyFile"
+          prBody=""
+          hasChanges=false
 
           git fetch origin
           git checkout master
+          
+          # Close any existing patches PR and force-delete the branch
+          git push origin --delete patches 2>/dev/null || true
           git branch -D patches 2>/dev/null || true
           git checkout -B patches master
 
@@ -37,24 +39,31 @@ jobs:
             branch="$3"; [ -z "$branch" ] && branch="master"
 
             target="${dir#./}"
-            prefix="${dir#./}/"
+            remoteName="remote_$(echo "$target" | tr '/' '_')"
 
-            tmpBranch="tmpMerge_$(echo "$target" | tr '/' '_')"
-            git fetch "$repo" "$branch"
-            git checkout -B "$tmpBranch" patches
+            # Add remote and fetch
+            git remote add "$remoteName" "$repo" 2>/dev/null || true
+            git fetch "$remoteName" "$branch"
 
-            git read-tree --prefix="$prefix" -u FETCH_HEAD
-            if git diff --cached --quiet; then
-              git checkout patches
-              git branch -D "$tmpBranch"
+            # Check if there are any changes
+            if git diff --quiet "patches:$dir" "FETCH_HEAD:"; then
+              git remote remove "$remoteName"
               return 0
             fi
-            git commit -m "Subtree merge $repo ($branch) into $target"
-            echo "* $repo/$branch → $target" >> "$prBodyFile"
 
-            git checkout patches
-            git merge "$tmpBranch"
-            git branch -D "$tmpBranch"
+            # Perform subtree merge
+            git merge -s subtree --no-commit --allow-unrelated-histories "FETCH_HEAD" || {
+              # If conflicts, abort and report
+              git merge --abort
+              git remote remove "$remoteName"
+              return 1
+            }
+
+            git commit -m "Merge $repo ($branch) into $target" || true
+            prBody="${prBody}* $repo/$branch → $target"$'\n'
+            hasChanges=true
+
+            git remote remove "$remoteName"
           }
 
           mergeGitBranch() {
@@ -63,15 +72,24 @@ jobs:
 
             head=$(git rev-parse HEAD)
             tmpRemote="tmpRemote_$(date +%s%N)"
+            
             git remote add "$tmpRemote" "$remoteRepo"
             git fetch "$tmpRemote" "$remoteBranch"
-            git merge FETCH_HEAD || true
+            git merge --no-edit FETCH_HEAD || {
+              git merge --abort
+              git remote remove "$tmpRemote"
+              return 1
+            }
             git remote remove "$tmpRemote"
+            
             newhead=$(git rev-parse HEAD)
             if [ "$newhead" != "$head" ]; then
-              echo "* $remoteRepo/$remoteBranch → patches" >> "$prBodyFile"
+              prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
+              hasChanges=true
             fi
           }
+
+          prBody="Automatic PR bringing latest commits from:"$'\n\n'
 
           # --- patches ---
           mergeDirRepo ./src/cmd/rio  git://shithub.us/nikita/rio  front
@@ -81,24 +99,28 @@ jobs:
           # --- branch-to-branch merge ---
           mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
 
-          if ! grep -q '^\*' "$prBodyFile" 2>/dev/null; then
+          if [ "$hasChanges" = false ]; then
             echo "No new commits to merge."
-            rm -f "$prBodyFile"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "prBody<<EOF" >> "$GITHUB_OUTPUT"
-          cat "$prBodyFile" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          rm -f "$prBodyFile"
+          {
+            echo "prBody<<EOF"
+            echo "$prBody"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
           git push -f origin patches
 
       - name: openPullRequest
-        if: steps.applyPatches.outcome == 'success'
+        if: steps.applyPatches.outputs.has_changes == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
           base: master
           branch: patches
           title: "Sync patches"
           body: ${{ steps.applyPatches.outputs.prBody }}
+          token: ${{ secrets.GITHUB_TOKEN }}
