@@ -2,7 +2,7 @@ name: Apply Patches (GitLab + shithub)
 
 on:
   schedule:
-    - cron: '0 6 */1 * *'   # daily at 06:00
+    - cron: '0 6 */1 * *'
   workflow_dispatch:
 
 jobs:
@@ -15,6 +15,7 @@ jobs:
           fetch-depth: 0
 
       - name: applyPatches
+        id: applyPatches
         run: |
           set -e
 
@@ -27,10 +28,7 @@ jobs:
           git fetch origin
           git checkout master
           
-          # Close any existing patches PR
           gh pr close patches --delete-branch 2>/dev/null || true
-          
-          # Force-delete the branch locally and remotely
           git push origin --delete patches 2>/dev/null || true
           git branch -D patches 2>/dev/null || true
           git checkout -B patches master
@@ -38,147 +36,33 @@ jobs:
           mergeDirRepo() {
             dirPath="$1"
             repoUrl="$2"
-            branchName="$3"; [ -z "$branchName" ] && branchName="master"
+            branchName="$3"
+            [ -z "$branchName" ] && branchName="master"
 
             targetDir="${dirPath#./}"
             remoteName="remote_$(echo "$targetDir" | tr '/' '_')"
-            subtreePrefix="${targetDir%/}/"
 
-            # Add remote and fetch
             git remote add "$remoteName" "$repoUrl" 2>/dev/null || true
             git fetch "$remoteName" "$branchName"
 
-            headBefore=$(git rev-parse HEAD)
+            oldHead=$(git rev-parse HEAD)
 
-            # If directory doesn't exist, use read-tree for initial import
             if [ ! -d "$targetDir" ]; then
-              git read-tree --prefix="$subtreePrefix" -u FETCH_HEAD
-              if ! git diff --cached --quiet; then
-                git commit -m "Import $repoUrl ($branchName) into $targetDir"
-                prBody="${prBody}* $repoUrl/$branchName → $targetDir"
-
-          mergeGitBranch() {
-            remoteRepo="$1"
-            remoteBranch="$2"
-
-            headBefore=$(git rev-parse HEAD)
-            tmpRemote="tmpRemote_$(date +%s%N)"
-            
-            git remote add "$tmpRemote" "$remoteRepo"
-            git fetch "$tmpRemote" "$remoteBranch"
-            git merge --no-edit FETCH_HEAD || {
-              git merge --abort
-              git remote remove "$tmpRemote"
-              return 1
-            }
-            git remote remove "$tmpRemote"
-            
-            headAfter=$(git rev-parse HEAD)
-            if [ "$headAfter" != "$headBefore" ]; then
-              prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
+              git subtree add --prefix="$targetDir" "$remoteName" "$branchName" --squash
               hasChanges=true
-            fi
-          }
-
-          prBody="Automatic PR bringing latest commits from:"$'\n\n'
-
-          # --- patches ---
-          mergeDirRepo ./src/cmd/rio  git://shithub.us/nikita/rio  front
-          mergeDirRepo ./src/cmd/acme git://shithub.us/nikita/acme front
-          mergeDirRepo ./src/cmd/lola git://shithub.us/aap/lola    front
-
-          # --- branch-to-branch merge (ephemeral, no persistent gitlab branch) ---
-          mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
-
-          if [ "$hasChanges" = false ]; then
-            echo "No new commits to merge."
-            exit 0
-          fi
-
-          # Push the branch
-          git push -f origin patches
-
-          # Create PR using gh CLI
-          gh pr create \
-            --base master \
-            --head patches \
-            --title "Sync patches" \
-            --body "$prBody" || echo "PR already exists or creation failed"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-\n'
-                hasChanges=true
-              fi
+              prBody="${prBody}* $repoUrl/$branchName → $targetDir"$'\n'
             else
-              # Directory exists, do proper merge preserving upstream commits
-              # Use subtree merge strategy with full commit history
-              oldHead=$(git rev-parse HEAD)
-              
-              # Merge with subtree strategy, preserving all commits
-              git merge -s subtree --no-ff --allow-unrelated-histories \
-                -m "Merge $repoUrl ($branchName) into $targetDir" \
-                FETCH_HEAD || {
+              if git subtree pull --prefix="$targetDir" "$remoteName" "$branchName" --squash; then
+                newHead=$(git rev-parse HEAD)
+                if [ "$newHead" != "$oldHead" ]; then
+                  prBody="${prBody}* $repoUrl/$branchName → $targetDir"$'\n'
+                  hasChanges=true
+                fi
+              else
                 echo "Merge conflict in $targetDir, aborting"
                 git merge --abort 2>/dev/null || true
                 git remote remove "$remoteName"
                 return 1
-              }
-              
-              newHead=$(git rev-parse HEAD)
-              if [ "$newHead" != "$oldHead" ]; then
-                prBody="${prBody}* $repoUrl/$branchName → $targetDir"
-
-          mergeGitBranch() {
-            remoteRepo="$1"
-            remoteBranch="$2"
-
-            headBefore=$(git rev-parse HEAD)
-            tmpRemote="tmpRemote_$(date +%s%N)"
-            
-            git remote add "$tmpRemote" "$remoteRepo"
-            git fetch "$tmpRemote" "$remoteBranch"
-            git merge --no-edit FETCH_HEAD || {
-              git merge --abort
-              git remote remove "$tmpRemote"
-              return 1
-            }
-            git remote remove "$tmpRemote"
-            
-            headAfter=$(git rev-parse HEAD)
-            if [ "$headAfter" != "$headBefore" ]; then
-              prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
-              hasChanges=true
-            fi
-          }
-
-          prBody="Automatic PR bringing latest commits from:"$'\n\n'
-
-          # --- patches ---
-          mergeDirRepo ./src/cmd/rio  git://shithub.us/nikita/rio  front
-          mergeDirRepo ./src/cmd/acme git://shithub.us/nikita/acme front
-          mergeDirRepo ./src/cmd/lola git://shithub.us/aap/lola    front
-
-          # --- branch-to-branch merge (ephemeral, no persistent gitlab branch) ---
-          mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
-
-          if [ "$hasChanges" = false ]; then
-            echo "No new commits to merge."
-            exit 0
-          fi
-
-          # Push the branch
-          git push -f origin patches
-
-          # Create PR using gh CLI
-          gh pr create \
-            --base master \
-            --head patches \
-            --title "Sync patches" \
-            --body "$prBody" || echo "PR already exists or creation failed"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-\n'
-                hasChanges=true
               fi
             fi
 
@@ -194,43 +78,53 @@ jobs:
             
             git remote add "$tmpRemote" "$remoteRepo"
             git fetch "$tmpRemote" "$remoteBranch"
-            git merge --no-edit FETCH_HEAD || {
+            
+            if git merge --no-edit FETCH_HEAD; then
+              git remote remove "$tmpRemote"
+              headAfter=$(git rev-parse HEAD)
+              if [ "$headAfter" != "$headBefore" ]; then
+                prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
+                hasChanges=true
+              fi
+            else
               git merge --abort
               git remote remove "$tmpRemote"
               return 1
-            }
-            git remote remove "$tmpRemote"
-            
-            headAfter=$(git rev-parse HEAD)
-            if [ "$headAfter" != "$headBefore" ]; then
-              prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
-              hasChanges=true
             fi
           }
 
           prBody="Automatic PR bringing latest commits from:"$'\n\n'
 
-          # --- patches ---
           mergeDirRepo ./src/cmd/rio  git://shithub.us/nikita/rio  front
           mergeDirRepo ./src/cmd/acme git://shithub.us/nikita/acme front
           mergeDirRepo ./src/cmd/lola git://shithub.us/aap/lola    front
 
-          # --- branch-to-branch merge (ephemeral, no persistent gitlab branch) ---
           mergeGitBranch https://gitlab.com/atamariya/plan9front.git dev
 
           if [ "$hasChanges" = false ]; then
             echo "No new commits to merge."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Push the branch
-          git push -f origin patches
+          echo "prBody<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$prBody" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
-          # Create PR using gh CLI
+          git push -f origin patches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: openPullRequest
+        if: steps.applyPatches.outputs.has_changes == 'true'
+        run: |
           gh pr create \
             --base master \
             --head patches \
             --title "Sync patches" \
-            --body "$prBody" || echo "PR already exists or creation failed"
+            --body "${{ steps.applyPatches.outputs.prBody }}" \
+            || echo "PR already exists"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
