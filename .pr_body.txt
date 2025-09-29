@@ -1,0 +1,5 @@
+Automatic PR bringing latest commits from:
+* git://shithub.us/nikita/rio/front → src/cmd/rio
+* git://shithub.us/nikita/acme/front → src/cmd/acme
+* git://shithub.us/aap/lola/front → src/cmd/lola
+* https://gitlab.com/atamariya/plan9front.git/dev → patches
