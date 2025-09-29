@@ -36,21 +36,24 @@ jobs:
             repo="$2"
             branch="$3"; [ -z "$branch" ] && branch="master"
 
+            target="${dir#./}"
+            prefix="${dir#./}/"
+
             mkdir -p "$dir"
 
-            tmpBranch="tmpMerge_$(echo "$dir" | tr '/' '_')"
+            tmpBranch="tmpMerge_$(echo "$target" | tr '/' '_')"
             git fetch "$repo" "$branch"
             git checkout -B "$tmpBranch" patches
 
-            git read-tree --prefix="$dir"/ -u FETCH_HEAD
-            git commit -m "Subtree merge $repo ($branch) into $dir" || true
+            git read-tree --prefix="$prefix" -u FETCH_HEAD
+            git commit -m "Subtree merge $repo ($branch) into $target" || true
 
             git checkout patches
             git merge --allow-unrelated-histories "$tmpBranch" || true
 
             git branch -D "$tmpBranch"
 
-            echo "* $repo/$branch → $dir" >> "$prBodyFile"
+            echo "* $repo/$branch → $target" >> "$prBodyFile"
           }
 
           mergeGitBranch() {
