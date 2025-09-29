@@ -15,7 +15,6 @@ jobs:
           fetch-depth: 0
 
       - name: applyPatches
-        id: applyPatches
         run: |
           set -e
 
@@ -28,7 +27,10 @@ jobs:
           git fetch origin
           git checkout master
           
-          # Close any existing patches PR and force-delete the branch
+          # Close any existing patches PR
+          gh pr close patches --delete-branch 2>/dev/null || true
+          
+          # Force-delete the branch locally and remotely
           git push origin --delete patches 2>/dev/null || true
           git branch -D patches 2>/dev/null || true
           git checkout -B patches master
@@ -110,26 +112,17 @@ jobs:
 
           if [ "$hasChanges" = false ]; then
             echo "No new commits to merge."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Export PR body for the next step
-          {
-            echo "prBody<<EOF"
-            echo "$prBody"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-          
-          echo "has_changes=true" >> "$GITHUB_OUTPUT"
-
+          # Push the branch
           git push -f origin patches
 
-      - name: openPullRequest
-        if: steps.applyPatches.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@v5
-        with:
-          base: master
-          branch: patches
-          title: "Sync patches"
-          body: ${{ steps.applyPatches.outputs.prBody }}
+          # Create PR using gh CLI
+          gh pr create \
+            --base master \
+            --head patches \
+            --title "Sync patches" \
+            --body "$prBody" || echo "PR already exists or creation failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
