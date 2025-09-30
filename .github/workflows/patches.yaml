@@ -136,4 +136,6 @@ jobs:
             --title "Sync patches" \
             --body "${{ steps.applyPatches.outputs.prBody }}" \
             || echo "PR already exists"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
