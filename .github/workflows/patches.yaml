@@ -1,4 +1,4 @@
-name: Apply Patches (GitLab + shithub)
+name: Apply Patches
 
 on:
   schedule:
@@ -17,7 +17,7 @@ jobs:
       - name: applyPatches
         id: applyPatches
         run: |
-          set -e
+          set -eux
 
           git config user.name '󰬭 [CI] 󰬭'
           git config user.email 'action@github.com'
