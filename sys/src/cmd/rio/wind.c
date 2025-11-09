@@ -12,6 +12,38 @@
 #include "dat.h"
 #include "fns.h"
 
+void
+waddhistory(Window *w, Rune *r, int nr)
+{
+	int i;
+	Rune *s;
+	
+	if(nr <= 0)
+		return;
+		
+	if(w->nhistory > 0 && nr == w->historylens[0] && 
+	   memcmp(r, w->history[0], nr*sizeof(Rune)) == 0)
+		return;
+	
+	s = runemalloc(nr);
+	runemove(s, r, nr);
+	
+	if(w->nhistory == w->maxhistory) {
+		free(w->history[w->maxhistory-1]);
+	} else {
+		w->nhistory++;
+	}
+	
+	for(i = w->nhistory-1; i > 0; i--) {
+		w->history[i] = w->history[i-1];
+		w->historylens[i] = w->historylens[i-1];
+	}
+	
+	w->history[0] = s;
+	w->historylens[0] = nr;
+	w->histpos = -1;
+}
+
 Window*
 wlookid(int id)
 {
@@ -437,6 +469,7 @@ struct Completejob
 {
 	char	*dir;
 	char	*str;
+	char	*binpath;
 	Window	*win;
 };
 
@@ -448,8 +481,11 @@ completeproc(void *arg)
 
 	job = arg;
 	threadsetname("namecomplete %s", job->dir);
-
 	c = complete(job->dir, job->str);
+	if((c == nil || c->nmatch == 0) && job->binpath != nil){
+		c = complete(job->binpath, job->str);
+	}
+	
 	if(c != nil && sendp(job->win->complete, c) <= 0)
 		freecompletion(c);
 
@@ -457,6 +493,7 @@ completeproc(void *arg)
 
 	free(job->dir);
 	free(job->str);
+	free(job->binpath);
 	free(job);
 }
 
@@ -483,7 +520,7 @@ namecomplete(Window *w)
 {
 	int nstr, npath;
 	Rune *path, *str;
-	char *dir, *root;
+	char *dir, *root, *binpath;
 	Completejob *job;
 
 	/* control-f: filename completion; works back to white space or / */
@@ -493,11 +530,15 @@ namecomplete(Window *w)
 	str = w->r+(w->q0-nstr);
 	npath = windfilewidth(w, w->q0-nstr, FALSE);
 	path = w->r+(w->q0-nstr-npath);
+	binpath = nil;
 
 	/* is path rooted? if not, we need to make it relative to window path */
 	if(npath>0 && path[0]=='/')
 		dir = runetobyte(path, npath, &npath);
 	else {
+		/* only to try completing a command if it's at the start of a prompt */
+		if(w->q0-nstr-npath == w->qh)
+			binpath = smprint("/bin/%.*S", npath, path);
 		if(strcmp(w->dir, "") == 0)
 			root = ".";
 		else
@@ -506,11 +547,15 @@ namecomplete(Window *w)
 	}
 	if(dir == nil)
 		return;
-
+		
 	/* run in background, winctl will collect the result on w->complete chan */
 	job = emalloc(sizeof *job);
 	job->str = runetobyte(str, nstr, &nstr);
 	job->dir = cleanname(dir);
+	if(binpath != nil)
+		job->binpath = cleanname(binpath);
+	else
+		job->binpath = nil;
 	job->win = w;
 	incref(w);
 	proccreate(completeproc, job, STACK);
@@ -796,6 +841,35 @@ wlook(Window *w)
 }
 
 void
+wrlook(Window *w)
+{
+    int i, n, e;
+
+    i = w->q0;
+    n = w->q1 - w->q0;
+    e = w->nr - n;
+    if(n <= 0 || e < n)
+        return;
+
+    if(i == 0)
+        i = e;
+    else
+        i--;
+
+    while(runestrncmp(w->r+w->q0, w->r+i, n) != 0){
+        if(i > 0)
+            i--;
+        else
+            i = e;
+        if(i == w->q0)
+            break;
+    }
+
+    wsetselect(w, i, i+n);
+    wshow(w, i);
+}
+
+void
 wplumb(Window *w)
 {
 	Plumbmsg *m;
@@ -840,9 +914,75 @@ wplumb(Window *w)
 }
 
 static void
+whistup(Window *w)
+{
+	uint p0, p1;
+	
+	if(w->histpos == -1 && w->nhistory > 0) {
+		p0 = w->qh;
+		p1 = w->nr;
+		
+		while(p0 > 0 && w->r[p0-1] != '\n')
+			p0--;
+		
+		if(p1 > p0) {
+			w->nsavedcmd = p1 - p0;
+			w->savedcmd = runemalloc(w->nsavedcmd);
+			runemove(w->savedcmd, w->r + p0, w->nsavedcmd);
+			wdelete(w, p0, p1);
+		}
+		
+		w->histpos = 0;
+		if(w->histpos < w->nhistory)
+			winsert(w, w->history[w->histpos], w->historylens[w->histpos], p0);
+	} else if(w->histpos+1 < w->nhistory) {
+		p0 = w->qh;
+		while(p0 > 0 && w->r[p0-1] != '\n')
+			p0--;
+		
+		wdelete(w, p0, w->nr);
+		
+		w->histpos++;
+		winsert(w, w->history[w->histpos], w->historylens[w->histpos], p0);
+	}
+}
+
+static void
+whistdown(Window *w)
+{
+	uint p0;
+	
+	if(w->histpos > 0) {
+		p0 = w->qh;
+		while(p0 > 0 && w->r[p0-1] != '\n')
+			p0--;
+		
+		wdelete(w, p0, w->nr);
+		
+		w->histpos--;
+		winsert(w, w->history[w->histpos], w->historylens[w->histpos], p0);
+	} else if(w->histpos == 0) {
+		p0 = w->qh;
+		while(p0 > 0 && w->r[p0-1] != '\n')
+			p0--;
+		
+		wdelete(w, p0, w->nr);
+		
+		if(w->savedcmd != nil) {
+			winsert(w, w->savedcmd, w->nsavedcmd, p0);
+			free(w->savedcmd);
+			w->savedcmd = nil;
+			w->nsavedcmd = 0;
+		}
+		
+		w->histpos = -1;
+	}
+}
+
+static void
 wkeyctl(Window *w, Rune r)
 {
-	uint q0 ,q1;
+	uint q0 ,q1, p0;
 	int n, nb;
 	int *notefd;
 
@@ -862,7 +1002,26 @@ wkeyctl(Window *w, Rune r)
 	/* navigation keys work only when mouse and kbd is not open */
 	if(!w->mouseopen)
 		switch(r){
+		case 0x03:	/* ^C: copy selection to snarf buffer */
+			if(w->q0 != w->q1)
+				wsnarf(w);
+			return;
+		case 0x16:	/* ^V: paste from snarf buffer */
+			getsnarf();
+			wpaste(w);
+			wsetselect(w, w->q1, w->q1);
+			return;
+		case 0x18:	/* ^X: cut selection to snarf buffer */
+			if(w->q0 != w->q1) {
+				wsnarf(w);
+				wcut(w);
+			}
+			return;
 		case Kdown:
+			if(shiftdown) {
+				whistdown(w);
+				return;
+			}
 			n = shiftdown ? 1 : w->maxlines/3;
 			goto case_Down;
 		case Kscrollonedown:
@@ -877,8 +1036,12 @@ wkeyctl(Window *w, Rune r)
 			wsetorigin(w, q0, TRUE);
 			return;
 		case Kup:
-			n = shiftdown ? 1 : w->maxlines/3;
-			goto case_Up;
+			if(shiftdown) {
+				whistup(w);
+				return;
+			}
+    		n = shiftdown ? 1 : w->maxlines/3;
+    		goto case_Up;
 		case Kscrolloneup:
 			n = mousescrollsize(w->maxlines);
 			if(n <= 0)
@@ -891,14 +1054,30 @@ wkeyctl(Window *w, Rune r)
 			wsetorigin(w, q0, TRUE);
 			return;
 		case Kleft:
-			if(w->q0 > 0){
+			if(ctrldown){  /* Word-by-word movement using ctrl key */
+				q0 = w->q0;
+				while(q0 > 0 && !isalnum(w->r[q0-1]))
+					q0--;
+				while(q0 > 0 && isalnum(w->r[q0-1]))
+					q0--;
+				wsetselect(w, q0, q0);
+				wshow(w, q0);
+			}else if(w->q0 > 0){
 				q0 = w->q0-1;
 				wsetselect(w, q0, q0);
 				wshow(w, q0);
 			}
 			return;
 		case Kright:
-			if(w->q1 < w->nr){
+			if(ctrldown){
+				q0 = w->q0;
+				while(q0 < w->nr && !isalnum(w->r[q0]))
+					q0++;
+				while(q0 < w->nr && isalnum(w->r[q0]))
+					q0++;
+				wsetselect(w, q0, q0);
+				wshow(w, q0);
+			}else if(w->q1 < w->nr){
 				q1 = w->q1+1;
 				wsetselect(w, q1, q1);
 				wshow(w, q1);
@@ -961,6 +1140,12 @@ wkeyctl(Window *w, Rune r)
 		*notefd = dup(w->notefd, -1);
 		proccreate(interruptproc, notefd, 4096);
 		return;
+	case '\t':	/* Tab: file name completion only if not in hold mode */
+		if(!w->holding){
+			namecomplete(w);
+			return;
+		}
+		break;
 	case Kack:	/* ^F: file name completion */
 	case Kins:	/* Insert: file name completion */
 		namecomplete(w);
@@ -983,6 +1168,25 @@ wkeyctl(Window *w, Rune r)
 		}
 		return;
 	}
+	
+	if(r == '\n') {
+		/* qh: queue head - beginning of user input */
+		p0 = w->qh;
+		q0 = w->q0;
+		q1 = w->nr;
+
+		while(q1 > p0 && (w->r[q1-1] == ' ' || w->r[q1-1] == '\t'))
+			q1--;
+	
+		if(q1 > p0)
+			waddhistory(w, w->r + p0, q1 - p0);
+		
+		while(q0 < w->nr)
+			q0++;
+		wsetselect(w, q0, q0);
+		wshow(w, w->q0);
+	}
+	
 	/* otherwise ordinary character; just insert */
 	q0 = w->q0;
 	q0 = winsert(w, &r, 1, q0);
@@ -1089,24 +1293,9 @@ inmode(Rune r, int mode)
 static void
 wstretchsel(Window *w, uint pt, uint *q0, uint *q1, int mode)
 {
-	int c, i, rc, lc;
+	int c, i;
 	Rune *r, *l, *p;
 	uint q;
-
-	if(mode){
-		lc = *q0 > 0     ? w->r[*q0-1] : '\n';
-		rc = *q1 < w->nr ? w->r[*q1]   : '\n';
-		for(i=0; left[i]; i++){
-			l = left[i];
-			r = right[i];
-			p = strrune(l, lc);
-			if(p && r[p-l] == rc){
-				*q0 -= *q0 > 0 && lc != '\n';
-				*q1 += *q1 < w->nr;
-				return;
-			}
-		}
-	}
 
 	*q0 = pt;
 	*q1 = pt;
@@ -1263,6 +1452,15 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	Rectangle r;
 
 	w = emalloc(sizeof(Window));
+	w->nhistory = 0;
+	w->maxhistory = 100;
+	w->histpos = -1;
+	w->history = emalloc(w->maxhistory * sizeof(Rune*));
+	w->historylens = emalloc(w->maxhistory * sizeof(int));
+	for(int i = 0; i < w->maxhistory; i++)
+		w->history[i] = nil;
+	w->savedcmd = nil;
+	w->nsavedcmd = 0;
 	w->screenr = i->r;
 	r = insetrect(i->r, Selborder+1);
 	w->i = i;
@@ -1279,6 +1477,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, int scrolling)
 	w->gone = chancreate(sizeof(char*), 0);
 	w->scrollr = r;
 	w->scrollr.max.x = r.min.x+Scrollwid;
+	w->prevr = i->r;
 	w->lastsr = ZR;
 	r.min.x += Scrollwid+Scrollgap;
 	frinit(w, r, font, i, cols);
@@ -1341,14 +1540,54 @@ int
 wclose(Window *w)
 {
 	int i;
-
+	static void *already_closing = nil;
+	
+	/* Prevent recursion */
+	if(w == already_closing)
+		return 0;
+		
 	i = decref(w);
 	if(i > 0)
 		return 0;
-	if(i < 0)
-		error("negative ref count");
+	if(i < 0) {
+		fprint(2, "rio: negative ref count in wclose\n");
+	}
+	
+	already_closing = w;
+	
+	if(w->history != nil) {
+		if(w->nhistory > 0 && w->nhistory <= w->maxhistory) {
+			for(i = 0; i < w->nhistory; i++) {
+				if(w->history[i] != nil) {
+					free(w->history[i]);
+					w->history[i] = nil;
+				}
+			}
+		}
+		free(w->history);
+		w->history = nil;
+		
+		if(w->historylens != nil) {
+			free(w->historylens);
+			w->historylens = nil;
+		}
+		w->nhistory = 0;
+		w->maxhistory = 0;
+	}
+	
+	if(w->savedcmd != nil) {
+		free(w->savedcmd);
+		w->savedcmd = nil;
+		w->nsavedcmd = 0;
+	}
+	
+	w->histpos = -1;
+	
 	wclunk(w);
 	wsendctlmesg(w, Exited, ZR, nil);
+	
+	already_closing = nil;
+	
 	return 1;
 }
 
@@ -1367,6 +1606,16 @@ static int
 wctlmesg(Window *w, int m, Rectangle r, void *p)
 {
 	Image *i = p;
+	Channel *mc = w->mc.c; 
+	Channel *ck = w->ck;
+	Channel *cctl = w->cctl;
+	Channel *conswrite = w->conswrite;
+	Channel *consread = w->consread;
+	Channel *mouseread = w->mouseread;
+	Channel *wctlread = w->wctlread;
+	Channel *kbdread = w->kbdread;
+	Channel *complete = w->complete;
+	Channel *gone = w->gone;
 
 	switch(m){
 	default:
@@ -1449,21 +1698,25 @@ wctlmesg(Window *w, int m, Rectangle r, void *p)
 		flushimage(display, 1);
 		break;
 	case Exited:
+
+		
 		wclosewin(w);
 		frclear(w, TRUE);
 		flushimage(display, 1);
 		if(w->notefd >= 0)
 			close(w->notefd);
-		chanfree(w->mc.c);
-		chanfree(w->ck);
-		chanfree(w->cctl);
-		chanfree(w->conswrite);
-		chanfree(w->consread);
-		chanfree(w->mouseread);
-		chanfree(w->wctlread);
-		chanfree(w->kbdread);
-		chanfree(w->complete);
-		chanfree(w->gone);
+			
+		chanfree(mc);
+		chanfree(ck);
+		chanfree(cctl);
+		chanfree(conswrite);
+		chanfree(consread);
+		chanfree(mouseread);
+		chanfree(wctlread);
+		chanfree(kbdread);
+		chanfree(complete);
+		chanfree(gone);
+		
 		free(w->raw);
 		free(w->r);
 		free(w->dir);
@@ -1673,10 +1926,12 @@ winctl(void *arg)
 			if(wctlmesg(w, wcm.type, wcm.r, wcm.p) == Exited){
 				while(kbdqr != kbdqw)
 					free(kbdq[kbdqr++ % nelem(kbdq)]);
+				
 				chanfree(crm.c1);
 				chanfree(crm.c2);
 				chanfree(mrm.cm);
 				chanfree(cwm.cw);
+			
 				threadexits(nil);
 			}
 			continue;

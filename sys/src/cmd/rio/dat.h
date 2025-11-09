@@ -157,9 +157,11 @@ struct Window
 	 * Now they're always the same but the code doesn't assume so.
 	*/
 	Rectangle		screenr;	/* screen coordinates of window */
+	Rectangle		prevr;
 	int			resized;
 	int			wctlready;
 	Rectangle		lastsr;
+	Rectangle		origr; /* pre-maximized size */
 	int			topped;
 	int			notefd;
 	uchar		scrolling;
@@ -174,8 +176,16 @@ struct Window
 	uchar		kbdopen;
 	uchar		keyup;
 	uchar		winnameread;
+	uchar		maximized;
 	char			*label;
 	char			*dir;
+    Rune 		**history;
+    int 		*historylens;
+    int 		nhistory;
+    int 		maxhistory;
+    int 		histpos;
+    Rune 		*savedcmd;
+    int 		nsavedcmd;
 };
 
 void		winctl(void*);
@@ -195,6 +205,7 @@ void		wcut(Window*);
 void		wpaste(Window*);
 void		wplumb(Window*);
 void		wlook(Window*);
+void		wrlook(Window*);
 void		wscrdraw(Window*);
 void		wscroll(Window*, int);
 void		wsend(Window*);
@@ -340,4 +351,5 @@ int		menuing;		/* menu action is pending; waiting for window to be indicated */
 int		snarfversion;	/* updated each time it is written */
 int		messagesize;		/* negotiated in 9P version setup */
 int		shiftdown;
+int		ctrldown;
 int		debug;
