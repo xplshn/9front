@@ -90,7 +90,7 @@ jobs:
             git remote add "$tmpRemote" "$remoteRepo"
             git fetch "$tmpRemote" "$remoteBranch"
             
-            if git merge --no-edit FETCH_HEAD; then
+            if git merge --no-edit --allow-unrelated-histories FETCH_HEAD; then
               git remote remove "$tmpRemote"
               headAfter=$(git rev-parse HEAD)
               if [ "$headAfter" != "$headBefore" ]; then
