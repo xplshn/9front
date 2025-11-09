@@ -61,9 +61,14 @@ jobs:
             git remote add "$remoteName" "$repoUrl" 2>/dev/null || true
             git fetch "$remoteName" "$branchName"
 
+            # OVERWRITE MODE: clear working tree and index entries for target prefix first
             if isOverwrite "$targetDir"; then
               echo "Overwriting $targetDir from $repoUrl/$branchName"
+              # remove working-tree files (if any)
               rm -rf "$targetDir"
+              # ensure index has no entries under that path (prevents overlapping-entry errors)
+              git rm -r --cached --ignore-unmatch "$targetDir" || true
+              # now read the remote tree into the prefix
               git read-tree --prefix="$targetDir/" -u FETCH_HEAD
               git commit -m "Overwrite $targetDir with $repoUrl ($branchName)"
               hasChanges=true
@@ -72,6 +77,7 @@ jobs:
               return 0
             fi
 
+            # NORMAL MERGE MODE
             if [ ! -d "$targetDir" ]; then
               git read-tree --prefix="$targetDir/" -u FETCH_HEAD
               git commit -m "Add $repoUrl ($branchName) into $targetDir"
