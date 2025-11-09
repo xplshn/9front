@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 6 */1 * *'
   workflow_dispatch:
+    inputs:
+      overwrite_dirs:
+        description: "Space-separated list of directory basenames to overwrite instead of merge (e.g. 'rio lola')"
+        required: false
+        default: ""
 
 jobs:
   patch:
@@ -33,6 +38,16 @@ jobs:
           git branch -D patches 2>/dev/null || true
           git checkout -B patches master
 
+          OVERWRITE_DIRS="${{ github.event.inputs.overwrite_dirs }}"
+
+          isOverwrite() {
+            dirBase="$(basename "$1")"
+            for d in $OVERWRITE_DIRS; do
+              [ "$d" = "$dirBase" ] && return 0
+            done
+            return 1
+          }
+
           mergeDirRepo() {
             dirPath="$1"
             repoUrl="$2"
@@ -45,6 +60,17 @@ jobs:
 
             git remote add "$remoteName" "$repoUrl" 2>/dev/null || true
             git fetch "$remoteName" "$branchName"
+
+            if isOverwrite "$targetDir"; then
+              echo "Overwriting $targetDir from $repoUrl/$branchName"
+              rm -rf "$targetDir"
+              git read-tree --prefix="$targetDir/" -u FETCH_HEAD
+              git commit -m "Overwrite $targetDir with $repoUrl ($branchName)"
+              hasChanges=true
+              prBody="${prBody}* $repoUrl/$branchName → (overwrite) $targetDir"$'\n'
+              git remote remove "$remoteName"
+              return 0
+            fi
 
             if [ ! -d "$targetDir" ]; then
               git read-tree --prefix="$targetDir/" -u FETCH_HEAD
@@ -111,7 +137,7 @@ jobs:
           mergeDirRepo ./sys/src/cmd/acme git://shithub.us/nikita/acme front
           mergeDirRepo ./sys/src/cmd/lola git://shithub.us/aap/lola    front
 
-          #mergeGitBranch https://gitlab.com/atamariya/plan9front.git   html
+          #mergeGitBranch https://gitlab.com/atamariya/plan9front.git  html
 
           if [ "$hasChanges" = false ]; then
             echo "No new commits to merge."
