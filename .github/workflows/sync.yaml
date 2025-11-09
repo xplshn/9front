@@ -1,0 +1,62 @@
+name: Sync with https://github.com/9front/9front
+
+on:
+  workflow_dispatch:
+    inputs:
+      ignore_conflicts:
+        description: "Ignore Conflicts: Remove everything except .github and .gitignore, then force-pull from 9front/front"
+        required: true
+        default: "false"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout GitHub repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: master
+
+    - name: Add 9front remote
+      run: |
+        git remote add source https://github.com/9front/9front
+        git fetch source front
+
+    - name: Sync or Ignore Conflicts
+      run: |
+        set -eu
+        git config user.name '󰬭 [CI] '
+        git config user.email 'action@github.com'
+
+        if [ "${{ github.event.inputs.ignore_conflicts }}" = "true" ]; then
+          echo "Ignoring conflicts: keeping only .github and .gitignore"
+
+          # Backup .github and .gitignore
+          mkdir /tmp/preserve
+          [ -d .github ] && cp -a .github /tmp/preserve/
+          [ -f .gitignore ] && cp -a .gitignore /tmp/preserve/
+
+          # Remove everything except .git itself
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Restore preserved files
+          cp -a /tmp/preserve/. .
+
+          # Reset to upstream and restore preserved files on top
+          git fetch source front
+          git reset --hard source/front
+          cp -a /tmp/preserve/. .
+          rm -rf /tmp/preserve
+
+          git add .github .gitignore || true
+          git commit --allow-empty -m "Preserve .github and .gitignore after sync"
+        else
+          echo "Normal merge mode"
+          git merge --allow-unrelated-histories source/front || true
+        fi
+
+    - name: Push changes
+      run: |
+        git push origin master --force
