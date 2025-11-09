@@ -111,7 +111,7 @@ jobs:
           #mergeDirRepo ./sys/src/cmd/acme git://shithub.us/nikita/acme front
           mergeDirRepo  ./sys/src/cmd/lola git://shithub.us/aap/lola    front
 
-          mergeGitBranch https://gitlab.com/atamariya/plan9front.git   html
+          #mergeGitBranch https://gitlab.com/atamariya/plan9front.git   html
 
           if [ "$hasChanges" = false ]; then
             echo "No new commits to merge."
