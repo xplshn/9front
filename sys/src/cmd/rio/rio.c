@@ -30,6 +30,7 @@ void		confirmexit(void);
 Image*	sweep(void);
 Image*	bandsize(Window*);
 Image*	drag(Window*);
+int			wtopcmp(void*, void*);
 void		resized(void);
 Channel	*exitchan;	/* chan(int) */
 Channel	*winclosechan; /* chan(Window*); */
@@ -62,6 +63,7 @@ enum
 	Snarf,
 	Plumb,
 	Look,
+	RLook,
 	Send,
 	Scroll,
 };
@@ -72,6 +74,7 @@ char		*menu2str[] = {
  [Snarf]		"snarf",
  [Plumb]		"plumb",
  [Look]		"look",
+ [RLook]	"rlook",
  [Send]		"send",
  [Scroll]		"scroll",
 			nil
@@ -368,8 +371,10 @@ keyboardtap(void*)
 	for(;;){
 		switch(alt(alts)){
 		case Akbd:
-			if(*s == 'k' || *s == 'K')
+			if(*s == 'k' || *s == 'K'){
 				shiftdown = utfrune(s+1, Kshift) != nil;
+				ctrldown = utfrune(s+1, Kctl) != nil;
+			}
 			if(totap == nil)
 				goto Bypass;
 			if(input != nil && input != cur){	/* context change */
@@ -623,6 +628,11 @@ mousethread(void*)
 						}
 					}else if(mouse->buttons & 4)
 						button3menu();
+					else if(mouse->buttons & 32){
+						button3menu();
+					} else if(mouse->buttons & 64){
+						button3menu();
+					}
 				}else{
 					/* if button 1 event in the window, top the window and wait for button up. */
 					/* otherwise, top the window and pass the event on */
@@ -842,6 +852,10 @@ button2menu(Window *w)
 		wlook(w);
 		break;
 
+	case RLook:
+		wrlook(w);
+		break;
+		
 	case Send:
 		wsend(w);
 		break;
@@ -901,8 +915,13 @@ sweep(void)
 	}
 	if(mouse->buttons != 0)
 		goto Rescue;
+	if(Dx(r)<5 && Dy(r)<5){
+		i = allocwindow(wscreen, wscreen->image->r, Refnone, DNofill);
+		r = wscreen->image->r;
+	}
 	if(i==nil || !goodrect(r))
 		goto Rescue;
+	
 	oi = i;
 	i = allocwindow(wscreen, oi->r, Refbackup, DNofill);
 	freeimage(oi);
@@ -962,7 +981,7 @@ drawborder(Rectangle r, Image *col)
 Image*
 drag(Window *w)
 {
-	Point p, op, d, dm, om;
+	Point p, op, origp, d, dm, om;
 	Rectangle r;
 
 	menuing = TRUE;
@@ -971,11 +990,14 @@ drag(Window *w)
 	dm = subpt(om, w->screenr.min);
 	d = subpt(w->screenr.max, w->screenr.min);
 	op = subpt(om, dm);
+	origp = w->i->r.min;
 	drawborder(Rect(op.x, op.y, op.x+d.x, op.y+d.y), sizecol);
 	while(mouse->buttons==4){
 		p = subpt(mouse->xy, dm);
+		r = Rect(p.x, p.y, p.x+d.x, p.y+d.y);
 		if(!eqpt(p, op)){
-			drawborder(Rect(p.x, p.y, p.x+d.x, p.y+d.y), sizecol);
+			originwindow(w->i, w->i->r.min, r.min);
+			drawborder(r, sizecol);
 			op = p;
 		}
 		readmouse(mousectl);
@@ -986,6 +1008,7 @@ drag(Window *w)
 	riosetcursor(inborder(r, p) ? corners[whichcorner(r, p)] : nil);
 	menuing = FALSE;
 	if(mouse->buttons!=0 || !goodrect(r) || eqrect(r, w->screenr)){
+		originwindow(w->i, w->i->r.min, origp);
 		flushimage(display, 1);
 		while(mouse->buttons)
 			readmouse(mousectl);
@@ -1032,6 +1055,60 @@ bandsize(Window *w)
 	}
 	return allocwindow(wscreen, or, Refbackup, DNofill);
 }
+
+/* TODO: Make this not flicker/cause artifacts */
+/* 
+Image*
+bandsize(Window *w)
+{
+	Rectangle r, or, origr;
+	Point p, startp;
+	int which, owhich, but;
+	Image *tmp;
+
+	owhich = -1;
+	or = w->screenr;
+	origr = or;
+	but = mouse->buttons;
+	startp = onscreen(mouse->xy);
+	drawborder(or, sizecol);
+	while(mouse->buttons == but) {
+		p = onscreen(mouse->xy);
+		which = whichcorner(or, p);
+		if(which != owhich && which != 4 && (owhich|~which) & 1){
+			owhich = which;
+			riosetcursor(corners[which]);
+		}
+		r = whichrect(or, p, owhich);
+		if(!eqrect(r, or) && goodrect(r)){
+			tmp = allocwindow(wscreen, r, Refnone, DNofill);
+			if(tmp != nil){
+				wsendctlmesg(w, Reshaped, r, tmp);
+			}
+			drawborder(r, sizecol);
+			or = r;
+		}
+		readmouse(mousectl);
+	}
+	drawborder(or, nil);
+	if(!goodrect(or))
+		riosetcursor(nil);
+	
+	if(mouse->buttons!=0 || !goodrect(or) || eqrect(or, origr)
+	|| abs(p.x-startp.x)+abs(p.y-startp.y) <= 1){
+		tmp = allocwindow(wscreen, origr, Refnone, DNofill);
+		if(tmp == nil)
+			error("bandsize: can't restore window");
+		wsendctlmesg(w, Reshaped, origr, tmp);
+		flushimage(display, 1);
+		while(mouse->buttons)
+			readmouse(mousectl);
+		return nil;
+	}
+	
+	return allocwindow(wscreen, r, Refbackup, DNofill);
+}
+*/ 
 
 Window*
 pointto(int wait)
@@ -1092,6 +1169,18 @@ Nope:
 	menuing = FALSE;
 }
 
+int
+ismaxed(Image *i)
+{
+    if(i == nil)
+        return 0;
+    
+    return i->r.min.x == screen->r.min.x &&
+           i->r.min.y == screen->r.min.y &&
+           i->r.max.x == screen->r.max.x &&
+           i->r.max.y == screen->r.max.y;
+}
+
 void
 resize(void)
 {
@@ -1104,28 +1193,91 @@ resize(void)
 	incref(w);
 	i = sweep();
 	if(i!=nil){
+        if(ismaxed(w->i) && ismaxed(i)){
+            	freeimage(i);
+            	i = allocwindow(wscreen, w->prevr, Refbackup, DNofill);
+        }
+        w->prevr = w->i->r; 
 		wcurrent(w);
 		wsendctlmesg(w, Reshaped, i->r, i);
 	}
 	wclose(w);
 }
 
+/*
+ * Check if a point is near an edge or corner of the screen
+ * Returns: -1 if not near edge, or bitmask indicating edges:
+ * Bit 0: Left edge
+ * Bit 1: Right edge  
+ * Bit 2: Top edge
+ * Bit 3: Bottom edge
+ */
+static int
+nearedge(Point p, Rectangle r, int threshold)
+{
+    int edges = 0;
+    
+    if(abs(p.x - r.min.x) < threshold)
+        edges |= 1;  /* Left */
+    if(abs(p.x - r.max.x) < threshold)
+        edges |= 2;  /* Right */
+    if(abs(p.y - r.min.y) < threshold)
+        edges |= 4;  /* Top */
+    if(abs(p.y - r.max.y) < threshold)
+        edges |= 8;  /* Bottom */
+        
+    return edges ? edges : -1;
+}
+
+static Rectangle
+snaprect(Rectangle screenr, int edges)
+{
+    Rectangle r;
+    int midx = (screenr.min.x + screenr.max.x)/2;
+    int midy = (screenr.min.y + screenr.max.y)/2;
+    
+    r = screenr;
+
+    if(edges & 1)  // Left edge
+        r.max.x = midx;
+    if(edges & 2)  // Right edge
+        r.min.x = midx;
+    if(edges & 4)  // Top edge
+        r.max.y = midy;
+    if(edges & 8)  // Bottom edge
+        r.min.y = midy;
+    
+    return r;
+}
+
 void
 move(void)
 {
-	Window *w;
-	Image *i;
-
-	w = pointto(FALSE);
-	if(w == nil)
-		return;
-	incref(w);
-	i = drag(w);
-	if(i!=nil){
-		wcurrent(w);
-		wsendctlmesg(w, Reshaped, i->r, i);
-	}
-	wclose(w);
+    Window *w;
+    Image *i;
+    Rectangle r;
+    int edges;
+    
+    w = pointto(FALSE);
+    if(w == nil)
+        return;
+    incref(w);
+    i = drag(w);
+    if(i != nil){
+        /* Check if near any edges when drag ends */
+        edges = nearedge(mouse->xy, screen->r, 20);  /* 20px threshold */
+        if(edges != -1){
+            /* Get snapped rectangle and replace dragged rectangle */
+            r = snaprect(screen->r, edges);
+            freeimage(i);
+            i = allocwindow(wscreen, r, Refbackup, DNofill);
+        }
+        if(i != nil){
+            wcurrent(w);
+            wsendctlmesg(w, Reshaped, i->r, i);
+        }
+    }
+    wclose(w);
 }
 
 int

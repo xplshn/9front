@@ -126,25 +126,34 @@ textscroll(Text *t, int but)
 			my = s.max.y;
 		if(but == 2){
 			y = my;
-			p0 = (vlong)t->file->nc*(y-s.min.y)/h;
-			if(p0 >= t->q1)
-				p0 = textbacknl(t, p0, 2);
+			if(y > s.max.y-2)
+				y = s.max.y-2;
+			if(t->file->nc > 1024*1024)
+				p0 = ((t->file->nc>>10)*(y-s.min.y)/h)<<10;
+			else
+				p0 = t->file->nc*(y-s.min.y)/h;
 			if(oldp0 != p0)
 				textsetorigin(t, p0, FALSE);
 			oldp0 = p0;
 			readmouse(mousectl);
 			continue;
 		}
-		if(but == 1)
-			p0 = textbacknl(t, t->org, (my-s.min.y)/t->font->height);
-		else
-			p0 = t->org+frcharofpt(t, Pt(s.max.x, my));
+		if(but == 1 || but == 4){
+			y = max(1, (my-s.min.y)/t->font->height);
+			p0 = textbacknl(t, t->org, y);
+		}else{
+			y = max(my, s.min.y+t->font->height);
+			p0 = t->org+frcharofpt(t, Pt(s.max.x, y));
+		}
 		if(oldp0 != p0)
 			textsetorigin(t, p0, TRUE);
 		oldp0 = p0;
-		/* debounce */
+		//debounce
 		if(first){
-			flushimage(display, 1);
+			if(display->bufp > display->buf)
+				flushimage(display, 1);
+			if(but > 3)
+				return;
 			sleep(200);
 			nbrecv(mousectl->c, &mousectl->Mouse);
 			first = FALSE;
@@ -153,4 +162,5 @@ textscroll(Text *t, int but)
 	}while(mouse->buttons & (1<<(but-1)));
 	while(mouse->buttons)
 		readmouse(mousectl);
+
 }

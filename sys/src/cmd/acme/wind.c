@@ -32,6 +32,8 @@ wininit(Window *w, Window *clone, Rectangle r)
 		incref(w);
 	w->ctlfid = ~0;
 	w->utflastqid = -1;
+	w->showlines = lineflag;
+	w->evil = evilflag;
 	r1 = r;
 	r1.max.y = r1.min.y + font->height;
 	w->tagtop = r;
@@ -87,6 +89,7 @@ wininit(Window *w, Window *clone, Rectangle r)
 		textsetselect(&w->body, clone->body.q0, clone->body.q1);
 		winsettag(w);
 	}
+	
 }
 
 int
@@ -167,11 +170,15 @@ wintaglines(Window *w, Rectangle r)
 int
 winresize(Window *w, Rectangle r, int safe, int fillfringe)
 {
-	int oy, y, mouseintag, mouseinbody;
+	int oy, y, mouseintag, mouseinbody, nw;
 	Point p;
 	Rectangle r1;
 	Image *b;
 	Rectangle br;
+
+    nw = 0; 
+    if(w->showlines)
+        nw = stringwidth(w->body.font, "000000 ");
 
 	mouseintag = ptinrect(mouse->xy, w->tag.all);
 	mouseinbody = ptinrect(mouse->xy, w->body.all);
@@ -222,6 +229,10 @@ winresize(Window *w, Rectangle r, int safe, int fillfringe)
 	/* If needed, resize & redraw body. */
 	r1 = r;
 	r1.min.y = y;
+	
+	if(w->showlines)
+	   r1.min.x += nw;
+	
 	if(!safe || !eqrect(w->body.r, r1)){
 		oy = y;
 		if(y+1+w->body.font->height <= r.max.y){	/* room for one line */
