@@ -86,21 +86,21 @@ jobs:
 
             headBefore=$(git rev-parse HEAD)
             tmpRemote="tmpRemote_$(date +%s%N)"
-            
+
             git remote add "$tmpRemote" "$remoteRepo"
             git fetch "$tmpRemote" "$remoteBranch"
-            
+
             if git merge --no-edit --allow-unrelated-histories FETCH_HEAD; then
-              git remote remove "$tmpRemote"
               headAfter=$(git rev-parse HEAD)
               if [ "$headAfter" != "$headBefore" ]; then
                 prBody="${prBody}* $remoteRepo/$remoteBranch → patches"$'\n'
                 hasChanges=true
               fi
+              git remote remove "$tmpRemote"
               return 0
             fi
 
-            git merge --abort
+            git merge --abort 2>/dev/null || true
             git remote remove "$tmpRemote"
             return 1
           }
