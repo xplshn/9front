@@ -39,10 +39,33 @@ textinit(Text *t, File *f, Rectangle r, Reffont *rf, Image *cols[NCOL])
 void
 textredraw(Text *t, Rectangle r, Font *f, Image *b, int odx)
 {
-	int maxt;
-	Rectangle rr;
+	int maxt, y, ln, nw, maxl;
+	char nums[12];
+	Rectangle rr, lr;
+
+    nw = stringwidth(f, "000000 ");
 
 	frinit(t, r, f, b, t->Frame.cols);
+	
+	/* TODO: Fix drawing, make numbers selectable */
+	if(t->w && t->w->showlines && t->what == Body){
+	   lr = t->r;
+	   lr.min.x = t->r.min.x - (nw + Scrollwid + Scrollgap);
+	   //lr.max.x = t->r.min.x - Scrollwid+Scrollgap;
+	   draw(t->b, lr, t->cols[BACK], nil, ZP);
+	   
+	   y = lr.min.y;
+	   ln = nlcount(t, 0, t->org, nil) + 1;
+	   maxl = nlcount(t, 0, t->file->nc, nil) + 1;
+	   while(y < lr.max.y && ln < maxl && ln < 999999){
+	       snprint(nums, sizeof(nums), "%6d", ln++);
+	       string(b, Pt(lr.min.x, y),
+	               t->cols[TEXT], ZP, f, nums);
+	       y += f->height;
+	   }
+	   
+	}
+	
 	rr = t->r;
 	rr.min.x -= Scrollwid+Scrollgap;	/* back fill to scroll bar */
 	draw(t->b, rr, t->cols[BACK], nil, ZP);
@@ -247,6 +270,14 @@ textload(Text *t, uint q0, char *file, int setqid)
 				dlp[ndl-1] = dl;
 			}
 			free(dbuf);
+		}
+		if(t->file->nname > 1){
+			dl = emalloc(sizeof(Dirlist));
+			dl->r = bytetorune("../", &dl->nr);
+			dl->wid = stringwidth(t->font, "../");
+			ndl++;
+			dlp = realloc(dlp, ndl*sizeof(Dirlist*));
+			dlp[ndl-1] = dl;
 		}
 		qsort(dlp, ndl, sizeof(Dirlist*), dircmp);
 		t->w->dlp = dlp;
@@ -668,7 +699,7 @@ textcomplete(Text *t)
 void
 texttype(Text *t, Rune r)
 {
-	uint q0, q1;
+	uint q0, q1, lp;
 	int nnb, nb, n, i;
 	int nr;
 	Rune rr;
@@ -678,6 +709,44 @@ texttype(Text *t, Rune r)
 	nr = 1;
 	rp = &r;
 	switch(r){
+	case 0x03:	/* ^C: copy selection to snarf buffer */
+		if(t->q0 != t->q1)
+			cut(t, t, nil, TRUE, FALSE, nil, 0);
+		return;
+	case 0x13: /* ^S: Save file */
+    	typecommit(t);
+    	if(t->what == Body && t->w) {
+        	put(t, nil, nil, XXX, XXX, nil, 0);
+    	}
+    	return;
+    case 'S': /* Ctl-Shift-s to save all. 
+    		   * there's probably a better way to do this */
+    	if(ctldown){
+    		typecommit(t);
+    		putall(nil, nil, nil, 0, 0, nil, 0);
+    		return;
+    	}
+    	break; /* just insert S */
+	case 0x16:	/* ^V: paste from snarf buffer */
+		paste(t, t, nil, TRUE, TRUE, nil, 0);
+		return;
+	case 0x18:	/* ^X: cut selection to snarf buffer */
+		if(t->q0 != t->q1)
+			cut(t, t, nil, TRUE, TRUE, nil, 0);
+		return;
+	case Kesc:
+		textsetselect(t, 0, t->file->nc);
+		return;
+	case Kdel:
+		typecommit(t);
+		if(t->q1 < t->file->nc){
+			if(t->q0 != t->q1){
+				cut(t, t, nil, TRUE, TRUE, nil, 0);
+			} else {
+				textdelete(t, t->q0, t->q0+1, TRUE);
+			}
+		}
+		return;
 	case Kleft:
 		typecommit(t);
 		if(t->q0 > 0)
@@ -689,8 +758,28 @@ texttype(Text *t, Rune r)
 			textshow(t, t->q1+1, t->q1+1, TRUE);
 		return;
 	case Kdown:
-		n = t->maxlines/3;
-		goto case_Down;
+        if(t->w->evil){
+            typecommit(t);
+            q0 = t->q0;
+            lp = 0;
+            /* title bar & win place the cursor past the end of the "file",
+                so we have to re-align it. */ 
+            if(q0 >= t->file->nc) q0 = t->file->nc - 1;
+            if(q0 > 0 && textreadc(t, q0) == '\n'){ q0--; lp++; }
+            while(q0 > 0 && textreadc(t, q0) != '\n'){ q0--; lp++; }
+            if(q0 == 0) lp++;
+            q0 = t->q0; 
+            while(q0<t->file->nc && textreadc(t, q0)!='\n') q0++;
+            q0++;
+            q1 = q0;
+            while(q0<t->file->nc && textreadc(t, q0)!='\n' && q0 < q1+lp-1) q0++;
+            q0 = (q0 >= t->file->nc) ? t->file->nc - 1 : q0;
+            textshow(t, q0, q0, TRUE);
+            return;
+		} else {
+            n = t->maxlines/3;
+            goto case_Down;
+        }
 	case Kscrollonedown:
 		n = mousescrollsize(t->maxlines);
 		if(n <= 0)
@@ -704,8 +793,28 @@ texttype(Text *t, Rune r)
 			textsetorigin(t, q0, TRUE);
 		return;
 	case Kup:
-		n = t->maxlines/3;
-		goto case_Up;
+        if(t->w->evil){
+            typecommit(t);
+            q0 = t->q0;
+            lp = 0;
+            if(q0 >= t->file->nc) q0 = t->file->nc - 1;
+            if(q0 > 0 && textreadc(t, q0) == '\n') q0--;
+            while(q0 > 0 && textreadc(t, q0) != '\n') { q0--; lp++; }
+            if(q0 == 0) {
+                textshow(t, q0, q0, TRUE);
+                return;
+            }
+            q0--;
+            while(q0 > 0 && textreadc(t, q0) != '\n') q0--;
+            if(q0 != 0) q0++;
+            q1 = q0; /* q1 keeps the start of the line, lp will be offset from it */
+            while(q0 < t->file->nc && textreadc(t, q0) != '\n' && q0 < q1 + lp - 1) q0++;
+            textshow(t, q0, q0, TRUE);
+            return;
+        } else {
+            n = t->maxlines/3;
+            goto case_Up;
+		}
 	case Kscrolloneup:
 		n = mousescrollsize(t->maxlines);
 		goto case_Up;
@@ -749,6 +858,8 @@ texttype(Text *t, Rune r)
 			error("text.type");
 		cut(t, t, nil, TRUE, TRUE, nil, 0);
 		t->eq0 = ~0;
+		if(r == 0x08)
+			return;
 	}
 	textshow(t, t->q0, t->q0, 1);
 	switch(r){
@@ -944,7 +1055,7 @@ textselect(Text *t)
 	if(mouse->msec-clickmsec >= 500 || selecttext != t || clickcount > 3 || dx > 3 || dy > 3)
 		clickcount = 0;
 	if(clickcount >= 1 && selecttext==t && mouse->msec-clickmsec < 500){
-		textstretchsel(t, &q0, &q1, clickcount);
+		textstretchsel(t, selectq, &q0, &q1, clickcount);
 		textsetselect(t, q0, q1);
 		flushimage(display, 1);
 		x = mouse->xy.x;
@@ -983,7 +1094,7 @@ textselect(Text *t)
 	}
 	if(q0 == q1){
 		if(q0==t->q0 && mouse->msec-clickmsec<500)
-			textstretchsel(t, &q0, &q1, clickcount);
+			textstretchsel(t, selectq, &q0, &q1, clickcount);
 		else
 			clicktext = t;
 		clickmsec = mouse->msec;
@@ -1316,30 +1427,14 @@ inmode(Rune r, int mode)
 }
 
 void
-textstretchsel(Text *t, uint *q0, uint *q1, int mode)
+textstretchsel(Text *t, uint mp, uint *q0, uint *q1, int mode)
 {
-	int c, i, lc, rc;
-	Rune *r, *l, *p, *x;
+	int c, i;
+	Rune *r, *l, *p;
 	uint q;
 
-	*q0 = t->q0;
-	*q1 = t->q1;
-
-	if(mode){
-		lc = *q0 > 0    	? textreadc(t, *q0-1) : '\n';
-		rc = *q1 < t->file->nc	? textreadc(t, *q1) : '\n';
-		for(i=0; left[i]; i++){
-			l = left[i];
-			r = right[i];
-			x = runestrchr(l, lc);
-			if(x && r[x-l] == rc){
-				*q0 -= *q0 > 0 && lc != '\n';
-				*q1 += *q1 < t->file->nc;
-				return;
-			}
-		}
-	}
-
+	*q0 = mp;
+	*q1 = mp;
 	for(i=0; left[i]!=nil; i++){
 		q = *q0;
 		l = left[i];

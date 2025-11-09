@@ -204,7 +204,7 @@ void		textcolumnate(Text*, Dirlist**, int);
 void		textcommit(Text*, int);
 void		textconstrain(Text*, uint, uint, uint*, uint*);
 void		textdelete(Text*, uint, uint, int);
-void		textstretchsel(Text*, uint*, uint*, int);
+void		textstretchsel(Text*, uint, uint*, uint*, int);
 void		textfill(Text*);
 void		textframescroll(Text*, int);
 void		textinit(Text*, File*, Rectangle, Reffont*, Image**);
@@ -243,8 +243,10 @@ struct Window
 	uchar	isscratch;
 	uchar	filemenu;
 	uchar	dirty;
+	uchar   evil;
 	uchar	indent[NINDENT];
 	uchar	showdel;
+	uchar   showlines;
 	int		id;
 	Range	addr;
 	Range	limit;
@@ -457,6 +459,7 @@ struct Expand
 	int	nname;
 	char	*bname;
 	int	jump;
+	int reverse;
 	union{
 		Text	*at;
 		Rune	*ar;
@@ -532,6 +535,8 @@ Text			*mousetext;	/* global because Text.close needs to clear it */
 Text			*typetext;		/* global because Text.close needs to clear it */
 Text			*barttext;		/* shared between mousetask and keyboardthread */
 int			bartflag;
+int         lineflag;
+int         evilflag;
 Window		*activewin;
 Column		*activecol;
 Buffer		snarfbuf;
@@ -552,6 +557,9 @@ int			editing;
 int			messagesize;		/* negotiated in 9P version setup */
 int			globalindent[NINDENT];
 Rune		*delcmd;			/* what command deleted the window. eg, Del, Delete, Delmesg */
+int			shiftdown;
+int			ctldown;
+int			altdown;
 
 Channel	*cplumb;		/* chan(Plumbmsg*) */
 Channel	*cwait;		/* chan(Waitmsg) */

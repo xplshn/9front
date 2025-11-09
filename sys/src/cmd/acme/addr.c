@@ -168,7 +168,7 @@ regexp(Mntdir *md, Text *t, Range lim, Range r, Rune *pat, int dir, int *foundp)
 }
 
 Range
-address(Mntdir *md, Text *t, Range lim, Range ar, void *a, uint q0, uint q1, int (*getc)(void*, uint),  int *evalp, uint *qp)
+address(Mntdir *md, Text *t, Range lim, Range ar, void *a, uint q0, uint q1, int (*getc)(void*, uint),  int *evalp, uint *qp, int reverse)
 {
 	int dir, size, npat;
 	int prevc, c, nc, n;
@@ -179,6 +179,8 @@ address(Mntdir *md, Text *t, Range lim, Range ar, void *a, uint q0, uint q1, int
 	r = ar;
 	q = q0;
 	dir = None;
+	if(reverse)
+		dir = Back;
 	size = Line;
 	c = 0;
 	while(q < q1){
@@ -197,7 +199,7 @@ address(Mntdir *md, Text *t, Range lim, Range ar, void *a, uint q0, uint q1, int
 			if(q>=q1 && t!=nil && t->file!=nil)	/* rhs defaults to $ */
 				r.q1 = t->file->nc;
 			else{
-				nr = address(md, t, lim, ar, a, q, q1, getc, evalp, &q);
+				nr = address(md, t, lim, ar, a, q, q1, getc, evalp, &q, FALSE);
 				r.q1 = nr.q1;
 			}
 			*qp = q;

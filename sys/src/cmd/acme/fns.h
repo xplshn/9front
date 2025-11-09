@@ -5,6 +5,8 @@ void	warning(Mntdir*, char*, ...);
 #define	fbufalloc()	emalloc(BUFSIZE)
 #define	fbuffree(x)	free(x)
 
+void	del(Text*, Text*, Text*, int, int, Rune*, int);
+void	putall(Text*, Text*, Text*, int, int, Rune*, int);
 void	plumblook(Plumbmsg*m);
 void	plumbshow(Plumbmsg*m);
 void	putsnarf(void);
@@ -57,8 +59,8 @@ void	fontx(Text*, Text*, Text*, int, int, Rune*, int);
 int	isspace(Rune);
 int	isalnum(Rune);
 void	execute(Text*, uint, uint, int, Text*);
-int	search(Text*, Rune*, uint);
-void	look3(Text*, uint, uint, int);
+int	search(Text*, Rune*, uint, int);
+void	look3(Text*, uint, uint, int, int);
 void	editcmd(Text*, Rune*, uint);
 uint	min(uint, uint);
 uint	max(uint, uint);
@@ -79,11 +81,11 @@ int		isregexc(int);
 void *emalloc(uint);
 void *erealloc(void*, uint);
 char	*estrdup(char*);
-Range		address(Mntdir*, Text*, Range, Range, void*, uint, uint, int (*)(void*, uint),  int*, uint*);
+Range		address(Mntdir*, Text*, Range, Range, void*, uint, uint, int (*)(void*, uint),  int*, uint*, int);
 int		rxexecute(Text*, Rune*, uint, uint, Rangeset*);
 int		rxbexecute(Text*, uint, Rangeset*);
 Window*	makenewwindow(Text *t);
-int	expand(Text*, uint, uint, Expand*);
+int	expand(Text*, uint, uint, Expand*, int);
 Rune*	skipbl(Rune*, int, int*);
 Rune*	findbl(Rune*, int, int*);
 char*	edittext(Window*, int, Rune*, int);

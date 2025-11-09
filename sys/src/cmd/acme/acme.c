@@ -30,6 +30,8 @@ int		mainpid;
 int		plumbsendfd;
 int		plumbeditfd;
 
+Channel	*kbdchan;	/* chan(char*); */
+
 enum{
 	NSnarf = 1000	/* less than 1024, I/O buffer size */
 };
@@ -42,6 +44,7 @@ Command *command;
 void	acmeerrorinit(void);
 void	readfile(Column*, char*);
 int	shutdown(void*, char*);
+Channel* initkbd(void);
 
 void
 derror(Display*, char *errorstr)
@@ -79,6 +82,9 @@ threadmain(int argc, char *argv[])
 		if(ncol <= 0)
 			goto Usage;
 		break;
+	case 'e':
+        evilflag = TRUE;
+        break;
 	case 'f':
 		fontnames[0] = ARGF();
 		if(fontnames[0] == nil)
@@ -97,9 +103,12 @@ threadmain(int argc, char *argv[])
 		if(loadfile == nil)
 			goto Usage;
 		break;
+	case 'n':
+	   lineflag = TRUE;
+	   break;
 	default:
 	Usage:
-		fprint(2, "usage: acme [-aib] [-c ncol] [-f font] [-F fixedfont] [-l loadfile | file...]\n");
+		fprint(2, "usage: acme [-aibne] [-c ncol] [-f font] [-F fixedfont] [-l loadfile | file...]\n");
 		exits("usage");
 	}ARGEND
 
@@ -178,11 +187,9 @@ threadmain(int argc, char *argv[])
 		threadexitsall("mouse");
 	}
 	mouse = mousectl;
-	keyboardctl = initkeyboard(nil);
-	if(keyboardctl == nil){
-		fprint(2, "acme: can't initialize keyboard: %r\n");
-		threadexitsall("keyboard");
-	}
+	kbdchan = initkbd();
+	if(kbdchan == nil)
+		error("can't find keyboard");
 	mainpid = getpid();
 	plumbeditfd = plumbopen("edit", OREAD|OCEXEC);
 	if(plumbeditfd >= 0){
@@ -228,8 +235,8 @@ threadmain(int argc, char *argv[])
 	flushimage(display, 1);
 
 	acmeerrorinit();
-	threadcreate(keyboardthread, nil, STACK);
-	threadcreate(mousethread, nil, STACK);
+    threadcreate(keyboardthread, nil, STACK);	
+    threadcreate(mousethread, nil, STACK);
 	threadcreate(waitthread, nil, STACK);
 	threadcreate(xfidallocthread, nil, STACK);
 	threadcreate(newwindowthread, nil, STACK);
@@ -360,26 +367,53 @@ plumbproc(void *)
 	}
 }
 
+/* some hotkeys are better handled outside texttype
+ * eg, don't apply to a particular window, or 
+ * interfere with control flow (ie del). */
+int
+globalmod(Rune r)
+{
+	switch(r){
+	case 0x04:
+		if(activewin)
+			del(&activewin->body, nil, nil, 0, 0, nil, 0);
+		return TRUE;
+	case '\n':
+		if(altdown){
+			char *name = estrdup("win");
+			run(nil, name, nil, 0, TRUE, nil, 0, FALSE);
+		} else 
+			return FALSE;
+		return TRUE;
+	}
+	
+	return FALSE;
+}
+
 void
 keyboardthread(void *)
 {
+	char *s;
 	Rune r;
 	Timer *timer;
 	Text *t;
+	char *bp;
+	
 	enum { KTimer, KKey, NKALT };
 	static Alt alts[NKALT+1];
 
 	alts[KTimer].c = nil;
 	alts[KTimer].v = nil;
 	alts[KTimer].op = CHANNOP;
-	alts[KKey].c = keyboardctl->c;
-	alts[KKey].v = &r;
+	alts[KKey].c = kbdchan;
+	alts[KKey].v = &s;
 	alts[KKey].op = CHANRCV;
 	alts[NKALT].op = CHANEND;
 
 	timer = nil;
 	typetext = nil;
 	threadsetname("keyboardthread");
+	
 	for(;;){
 		switch(alt(alts)){
 		case KTimer:
@@ -394,31 +428,121 @@ keyboardthread(void *)
 			alts[KTimer].c = nil;
 			alts[KTimer].op = CHANNOP;
 			break;
+			
 		case KKey:
-		casekeyboard:
-			typetext = rowtype(&row, r, mouse->xy);
-			t = typetext;
-			if(t!=nil && t->col!=nil && !(r==Kdown || r==Kleft || r==Kright))	/* scrolling doesn't change activecol */
-				activecol = t->col;
-			if(t!=nil && t->w!=nil)
-				t->w->body.file->curtext = &t->w->body;
-			if(timer != nil)
-				timercancel(timer);
-			if(t!=nil && t->what==Tag) {
-				timer = timerstart(500);
-				alts[KTimer].c = timer->c;
-				alts[KTimer].op = CHANRCV;
-			}else{
-				timer = nil;
-				alts[KTimer].c = nil;
-				alts[KTimer].op = CHANNOP;
+			if(*s == 'k' || *s == 'K') {
+				shiftdown = utfrune(s+1, Kshift) != nil;
+				ctldown = utfrune(s+1, Kctl) != nil;
+				altdown = utfrune(s+1, Kalt) != nil;
+				free(s);
+				break;
 			}
-			if(nbrecv(keyboardctl->c, &r) > 0)
-				goto casekeyboard;
+			
+			if(*s == 'c') {
+				bp = s + 1;
+				chartorune(&r, bp);
+				
+				if(globalmod(r))
+					typetext = nil;
+				else
+					typetext = rowtype(&row, r, mouse->xy);
+				t = typetext;
+				if(t!=nil && t->col!=nil && !(r==Kdown || r==Kleft || r==Kright))
+					activecol = t->col;
+				if(t!=nil && t->w!=nil)
+					t->w->body.file->curtext = &t->w->body;
+				
+				if(timer != nil)
+					timercancel(timer);
+				if(t!=nil && t->what==Tag) {
+					timer = timerstart(500);
+					alts[KTimer].c = timer->c;
+					alts[KTimer].op = CHANRCV;
+				} else {
+					timer = nil;
+					alts[KTimer].c = nil;
+					alts[KTimer].op = CHANNOP;
+				}
+			}
+			
+			free(s);
 			flushimage(display, 1);
 			break;
 		}
 	}
+}
+
+static void
+kbdproc(void *arg)
+{
+	Channel *c = arg;
+	char buf[1024], *p, *e;
+	int fd, cfd, kfd, n;
+
+	threadsetname("kbdproc");
+
+	if((fd = open("/dev/cons", OREAD)) < 0){
+		chanprint(c, "%r");
+		return;
+	}
+	if((cfd = open("/dev/consctl", OWRITE)) < 0){
+		chanprint(c, "%r");
+		return;
+	}
+	fprint(cfd, "rawon");
+
+	if(sendp(c, nil) <= 0)
+		return;
+
+	if((kfd = open("/dev/kbd", OREAD)) >= 0){
+		close(fd);
+
+		/* read kbd state */
+		while((n = read(kfd, buf, sizeof(buf)-1)) > 0){
+			e = buf+n;
+			e[-1] = 0;
+			e[0] = 0;
+			for(p = buf; p < e; p += strlen(p)+1)
+				chanprint(c, "%s", p);
+		}
+	} else {
+		/* read single characters */
+		p = buf;
+		for(;;){
+			Rune r;
+
+			e = buf + sizeof(buf);
+			if((n = read(fd, p, e-p)) <= 0)
+				break;
+			e = p + n;
+			while(p < e && fullrune(p, e - p)){
+				p += chartorune(&r, p);
+				if(r)
+					chanprint(c, "c%C", r);
+			}
+			n = e - p;
+			memmove(buf, p, n);
+			p = buf + n;
+		}
+	}
+	// send(exitchan, nil);
+}
+
+Channel*
+initkbd(void)
+{
+	Channel *c;
+	char *e;
+
+	c = chancreate(sizeof(char*), 16);
+	procrfork(kbdproc, c, STACK, RFCFDG);
+	if(e = recvp(c)){
+		chanfree(c);
+		c = nil;
+		werrstr("%s", e);
+		free(e);
+	}
+	return c;
 }
 
 void
@@ -432,6 +556,7 @@ mousethread(void *)
 	Mouse m;
 	char *act;
 	enum { MResize, MMouse, MPlumb, MWarnings, NMALT };
+	enum { Shift = 5 };
 	static Alt alts[NMALT+1];
 
 	threadsetname("mousethread");
@@ -521,15 +646,16 @@ mousethread(void *)
 			}
 			/* scroll buttons, wheels, etc. */
 			if(t->what==Body && w != nil && (m.buttons & (8|16))){
-				if(m.buttons & 8)
-					but = Kscrolloneup;
-				else
-					but = Kscrollonedown;
-				winlock(w, 'M');
-				t->eq0 = ~0;
-				texttype(t, but);
-				winunlock(w);
-				goto Continue;
+            winlock(w, 'M');
+            t->eq0 = ~0;
+            if(m.buttons & 8)
+                textscroll(t, 4);
+            else
+                textscroll(t, 5);
+            if(t->w->showlines)
+	           textredraw(t, t->r, t->font, t->b, Dx(t->all));
+            winunlock(w);
+            goto Continue;
 			}
 			if(ptinrect(m.xy, t->scrollr)){
 				if(but){
@@ -567,8 +693,9 @@ mousethread(void *)
 					if(textselect2(t, &q0, &q1, &argt))
 						execute(t, q0, q1, FALSE, argt);
 				}else if(m.buttons & 4){
-					if(textselect3(t, &q0, &q1))
-						look3(t, q0, q1, FALSE);
+					if(textselect3(t, &q0, &q1)){
+						look3(t, q0, q1, FALSE, ctldown);
+					}
 				}
 				if(w)
 					winunlock(w);
@@ -674,7 +801,7 @@ waitthread(void *)
 					pids = p;
 				}
 			}else{
-				if(search(t, c->name, c->nname)){
+				if(search(t, c->name, c->nname, FALSE)){
 					textdelete(t, t->q0, t->q1, TRUE);
 					textsetselect(t, 0, 0);
 				}
@@ -688,8 +815,9 @@ waitthread(void *)
 			if(c){
 				if(c->iseditcmd)
 					sendul(cedit, 0);
-				free(c->text);
 				free(c->name);
+				c->name = nil;
+				free(c->text);
 				fsysdelid(c->md);
 				free(c);
 			}
