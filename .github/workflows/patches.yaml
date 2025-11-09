@@ -108,7 +108,7 @@ jobs:
           prBody="Automatic PR bringing latest commits from:"$'\n\n'
 
           #mergeDirRepo ./sys/src/cmd/rio  git://shithub.us/nikita/rio  front
-          mergeDirRepo  ./sys/src/cmd/acme git://shithub.us/nikita/acme front
+          #mergeDirRepo ./sys/src/cmd/acme git://shithub.us/nikita/acme front
           mergeDirRepo  ./sys/src/cmd/lola git://shithub.us/aap/lola    front
 
           mergeGitBranch https://gitlab.com/atamariya/plan9front.git   html
