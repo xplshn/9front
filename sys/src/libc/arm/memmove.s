@@ -16,7 +16,8 @@ _memmove:
 	ADD	R(N), R(TS), R(TE)	/* to end pointer */
 
 	CMP	R(FROM), R(TS)
-	BLS	_forward
+	BLO	_forward
+	BEQ	_return			/* to == from */
 
 _back:
 	ADD	R(N), R(FROM)		/* from end pointer */

@@ -19,6 +19,7 @@ void		cachepage(Page*, Image*);
 void		callwithureg(void(*)(Ureg*));
 char*		chanpath(Chan*);
 int		canlock(Lock*);
+int		canmount(Pgrp*);
 int		canpage(Proc*);
 int		canqlock(QLock*);
 int		canrlock(RWLock*);
@@ -71,7 +72,9 @@ void		devdir(Chan*, Qid, char*, vlong, char*, long, Dir*);
 long		devdirread(Chan*, char*, long, Dirtab*, int, Devgen*);
 Devgen		devgen;
 void		devinit(void);
-int		devno(int, int);
+void		devmask(Pgrp*, int, char*);
+int		devmasked(Pgrp*, int);
+int		devno(int);
 Chan*		devopen(Chan*, int, Dirtab*, int, Devgen*);
 void		devpermcheck(char*, ulong, int);
 void		devpower(int);
@@ -107,7 +110,7 @@ int		eqchantdqid(Chan*, int, int, Qid, int);
 int		eqqid(Qid, Qid);
 _Noreturn void	error(char*);
 void		eqlock(QLock*);
-uintptr		execregs(uintptr, ulong, ulong);
+uintptr		execregs(uintptr, int, char**, Tos*);
 void		exhausted(char*);
 void		exit(int);
 uvlong		fastticks(uvlong*);
@@ -244,7 +247,9 @@ Cmdbuf*		parsecmd(char *a, int n);
 void		pathclose(Path*);
 ulong		perfticks(void);
 _Noreturn void	pexit(char*, int);
-void		pgrpcpy(Pgrp*, Pgrp*);
+void		pgrpcpy(Pgrp*, Pgrp*, int);
+void		pgrpinsert(Pgrp*, Mount *);
+void		pgrpremove(Pgrp*, Mount *);
 ulong		pidalloc(Proc*);
 #define		waserror()		setlabel(&up->errlab[up->nerrlab++])
 #define		poperror()		up->nerrlab--
@@ -432,9 +437,6 @@ uint		nhgetl(void*);
 ushort		nhgets(void*);
 ulong		µs(void);
 long		lcycles(void);
-void		devmask(Pgrp*,int,char*);
-int		devallowed(Pgrp*, int);
-int		canmount(Pgrp*);
 
 #pragma varargck argpos iprint	1
 #pragma	varargck argpos	panic	1

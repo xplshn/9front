@@ -222,25 +222,28 @@ mergedl(vlong merge, vlong gen, vlong bgen)
 	 * chain onto the existing dlist
 	 * tail.
 	 */
-	if(d->hd.addr == -1){
-		assert(d->ins == nil);
-		d->hd = m->hd;
-		d->tl = m->tl;
-		d->ins = m->ins;
-		if(d->ins != nil)
-			holdblk(d->ins);
-	}else{
-		if(m->ins != nil){
-			enqueue(m->ins);
-			dropblk(m->ins);
-			m->ins = nil;
+	if(m->hd.addr != -1){
+		if(d->hd.addr == -1){
+			assert(d->ins == nil);
+			d->hd = m->hd;
+			d->tl = m->tl;
+			d->ins = m->ins;
+			if(d->ins != nil)
+				holdblk(d->ins);
+		}else{
+			if(m->ins != nil){
+				enqueue(m->ins);
+				dropblk(m->ins);
+				m->ins = nil;
+			}
+			b = getblk(d->tl, 0);
+			b->logp = m->hd;
+			d->tl = m->tl;
+			assert(d->hd.addr != m->hd.addr);
+			finalize(b);
+			syncblk(b);
+			dropblk(b);
 		}
-		b = getblk(d->tl, 0);
-		b->logp = m->hd;
-		assert(d->hd.addr != m->hd.addr);
-		finalize(b);
-		syncblk(b);
-		dropblk(b);
 	}
 	msg[0].op = Odelete;
 	dlist2kv(m, &msg[0], buf[0], sizeof(buf[0]));
@@ -398,15 +401,23 @@ tagsnap(Tree *t, char *name, int flg)
 			free(n);
 			nexterror();
 		}
-		n->memref = 1;
+		aswapl(&n->memref, 1);
 		n->dirty = 0;
 		n->nlbl = 1;
 		n->nref = 0;
 		n->ht = t->ht;
 		n->bp = t->bp;
 		n->succ = -1;
+		/*
+		 * Because we can have blocks in-flight with gen==memgen,
+		 * which both sides of the fork can free, we need to make
+		 * sure that we don't deadlist them in the new snapshot.
+		 *
+		 * As a result, we need to use memgen, and not gen, in
+		 * order to prevent the potential for a double free.
+		 */
 		n->pred = t->gen;
-		n->base = t->gen;
+		n->base = t->memgen;
 		n->gen = fs->nextgen++;
 		n->memgen = fs->nextgen++;
 
@@ -423,13 +434,13 @@ tagsnap(Tree *t, char *name, int flg)
 		poperror();
 	}else{
 		t->nlbl++;
+
 		m[i].op = Orelink;
 		retag2kv(t->gen, t->succ, 1, 0, &m[i], buf[i], sizeof(buf[i]));
 		i++;
 
-		m[i].op = Oinsert;
 		t->pred = t->gen;
-		t->nlbl++;
+		m[i].op = Oinsert;
 		lbl2kv(name, t->gen, flg, &m[i], buf[i], sizeof(buf[i]));
 		i++;
 	}
@@ -467,7 +478,7 @@ updatesnap(Tree *o, char *lbl, int flg)
 		free(t);
 		nexterror();
 	}
-	t->memref = 1;
+	aswapl(&t->memref, 1);
 	t->dirty = 0;
 
 	t->nlbl = 1;
@@ -544,7 +555,7 @@ opensnap(char *label, int *flg)
 	if(!btlookup(&fs->snap, &k, &kv, buf, sizeof(buf)))
 		broke(Efs);
 	unpacktree(t, kv.v, kv.nv);
-	t->memref = 1;
+	aswapl(&t->memref, 1);
 	t->memgen = fs->nextgen++;
 	poperror();
 	return t;
@@ -557,7 +568,7 @@ opensnap(char *label, int *flg)
 void
 closesnap(Tree *t)
 {
-	if(t == nil || adec(&t->memref) != 0)
+	if(t == nil || aincl(&t->memref, -1) != 0)
 		return;
 	limbo(DFtree, t);
 }

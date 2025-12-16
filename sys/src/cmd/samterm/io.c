@@ -15,6 +15,8 @@ int	got;
 int	block;
 int	kbdc;
 int	resized;
+int	scrselecting;
+int	shifted;
 uchar	*hostp;
 uchar	*hoststop;
 uchar	*plumbbase;
@@ -22,10 +24,75 @@ uchar	*plumbp;
 uchar	*plumbstop;
 Channel	*plumbc;
 Channel	*hostc;
-Mousectl	*mousectl;
+Mousectl *mousectl;
 Mouse	*mousep;
-Keyboardctl *keyboardctl;
-void	panic(char*);
+Channel *kbdchan;
+
+static void
+kbdproc(void *arg)
+{
+	Channel *c = arg;
+	char buf[1024], *p;
+	int cfd, kfd, n;
+
+	threadsetname("kbdproc");
+	if((cfd = open("/dev/consctl", OWRITE)) < 0){
+		chanprint(c, "%r");
+		return;
+	} 
+	fprint(cfd, "rawon");
+
+	if(sendp(c, nil) <= 0)
+		return;
+
+	if((kfd = open("/dev/kbd", OREAD)) >= 0)
+		while((n = read(kfd, buf, sizeof(buf))) > 0)
+			for(p = buf; p < buf+n; p += strlen(p)+1)
+				chanprint(c, "%s", p);
+}
+
+static Channel*
+initkbd(void)
+{
+	Channel *c;
+	char *e;
+
+	c = chancreate(sizeof(char*), 20);
+	procrfork(kbdproc, c, 4096, RFCFDG);
+	if(e = recvp(c)){
+		chanfree(c);
+		c = nil;
+		werrstr("%s", e);
+		free(e);
+	}
+	return c;
+}
+
+void
+kbdkey(char *s)
+{
+	Rune r;
+	int type;
+
+	if(s == nil)
+		return;
+
+	type = *s++;
+	chartorune(&r, s);
+	if(r != Runeerror){
+		switch(type){
+		case 'k':
+		case 'K':
+			shifted = r == Kshift;
+			kbdc = -1;
+			break;
+		case 'c':
+			kbdc = r;
+			break;
+		}
+	}
+	free(s);
+}
 
 void
 initio(void)
@@ -37,20 +104,16 @@ initio(void)
 		threadexitsall("mouse");
 	}
 	mousep = mousectl;
-	keyboardctl = initkeyboard(nil);
-	if(keyboardctl == nil){
-		fprint(2, "samterm: keyboard init failed: %r\n");
-		threadexitsall("kbd");
-	}
+	kbdchan = initkbd();
 	hoststart();
 	plumbstart();
 }
 
 void
-getmouse(void)
+flushdisplay(void)
 {
-	if(readmouse(mousectl) < 0)
-		panic("mouse");
+	if(display->bufp > display->buf)
+		flushimage(display, 1);
 }
 
 void
@@ -63,13 +126,6 @@ void
 kbdblock(void)
 {		/* ca suffit */
 	block = (1<<RKeyboard)|(1<<RPlumb);
-}
-
-int
-button(int but)
-{
-	getmouse();
-	return mousep->buttons&(1<<(but-1));
 }
 
 void
@@ -88,7 +144,7 @@ int
 waitforio(void)
 {
 	Alt alts[NRes+1];
-	Rune r;
+	char *s;
 	int i;
 	ulong type;
 
@@ -106,8 +162,8 @@ again:
 	if(block & (1<<RHost))
 		alts[RHost].op = CHANNOP;
 
-	alts[RKeyboard].c = keyboardctl->c;
-	alts[RKeyboard].v = &r;
+	alts[RKeyboard].c = kbdchan;
+	alts[RKeyboard].v = &s;
 	alts[RKeyboard].op = CHANRCV;
 	if(block & (1<<RKeyboard))
 		alts[RKeyboard].op = CHANNOP;
@@ -128,8 +184,8 @@ again:
 
 	if(got & ~block)
 		return got & ~block;
-	if(display->bufp > display->buf)
-		flushimage(display, 1);
+	if(!scrselecting)
+		flushdisplay();
 	type = alt(alts);
 	switch(type){
 	case RHost:
@@ -141,7 +197,7 @@ again:
 		externload(i);
 		break;
 	case RKeyboard:
-		kbdc = r;
+		kbdkey(s);
 		break;
 	case RMouse:
 		break;
@@ -177,12 +233,34 @@ rcvstring(void)
 	return (char*)hostp;
 }
 
+/*
+ * when doing consecutive scrolling operations outside of the main loop
+ * in threadmain(), we need to wait for any RHost messages we've sent to
+ * come back from the host.
+ */
+void
+forcenter(Flayer *l, ulong a, int n)
+{
+	Text *t = l->user1;
+
+	flushdisplay();
+	center(l, a, n);
+	if(n > 0 && !t->lock)
+		/* no msg sent */
+		return;
+
+	do{
+		block = ~(1 << RHost);
+		waitforio();
+		rcv();
+	}while(t->lock);
+}
+
 void
 frscroll(Frame *f, int n)
 {
 	Flayer *l = which;
 	Text *t = l->user1;
-	long p;
 
 	if(nbrecv(mousectl->c, &mousectl->Mouse) < 0)
 		panic("mouse");
@@ -195,11 +273,14 @@ frscroll(Frame *f, int n)
 			l->p0 = sel;
 			l->p1 = l->origin+f->p0;
 		}
-		scrorigin(l, 1, -n+1);
 	}else if(n == 0){
+		flushdisplay();
 		sleep(25);
 		return;
 	}else{
+		/* don't scroll off the end */
+		if(l->origin+f->nchars == t->rasp.nrunes)
+			return;
 		if(sel >= l->origin+f->p1){
 			l->p0 = l->origin+f->p1;
 			l->p1 = sel;
@@ -207,20 +288,10 @@ frscroll(Frame *f, int n)
 			l->p0 = sel;
 			l->p1 = l->origin+f->p1;
 		}
-		p = l->origin;
-		if(l->origin+f->nchars != t->rasp.nrunes)
-			p += frcharofpt(f, Pt(l->scroll.max.x, l->scroll.min.y + n * f->font->height));
-		scrorigin(l, 2, p);
 	}
-
-	/*
-	 * we must pull io from host while we are in frame(2)
-	 */
-	do{
-		block = ~(1 << RHost);
-		waitforio();
-		rcv();
-	}while(t->lock);
+	scrselecting = 1;
+	forcenter(l, l->origin, n);
+	scrselecting = 0;
 }
 
 int
@@ -259,12 +330,12 @@ int kpeekc = -1;
 int
 ecankbd(void)
 {
-	Rune r;
+	char *s;
 
 	if(kpeekc >= 0)
 		return 1;
-	if(nbrecv(keyboardctl->c, &r) > 0){
-		kpeekc = r;
+	if(nbrecv(kbdchan, &s) > 0){
+		kbdkey(s);
 		return 1;
 	}
 	return 0;
@@ -274,18 +345,19 @@ int
 ekbd(void)
 {
 	int c;
-	Rune r;
+	char *s;
 
 	if(kpeekc >= 0){
 		c = kpeekc;
 		kpeekc = -1;
 		return c;
 	}
-	if(recv(keyboardctl->c, &r) < 0){
+	if(recv(kbdchan, &s) < 0){
 		fprint(2, "samterm: keybard recv error: %r\n");
 		panic("kbd");
 	}
-	return r;
+	kbdkey(s);
+	return kpeekc;
 }
 
 int

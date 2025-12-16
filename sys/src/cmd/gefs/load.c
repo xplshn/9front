@@ -30,13 +30,13 @@ loadarena(Arena *a, Bptr hd)
 		h0 = getblk(bp, 0);
 		poperror();
 	}else
-		print("loading arena primary header: %s\n", errmsg());
+		fprint(2, "loading arena primary header: %s\n", errmsg());
 	bp.addr += Blksz;
 	if(!waserror()){
 		h1 = getblk(bp, 0);
 		poperror();
 	}else
-		print("loading arena backup header: %s\n", errmsg());
+		fprint(2, "loading arena backup header: %s\n", errmsg());
 
 	/* if neither head nor tail is consistent, we're hosed */
 	b = (h0 != nil) ? h0 : h1;
@@ -81,7 +81,7 @@ loadfs(char *dev)
 	if(waserror())
 		sysfatal("load fs: %s", errmsg());
 	snprint(dump->name, sizeof(dump->name), "dump");
-	dump->ref = 1;
+	aswapl(&dump->ref, 1);
 	dump->gen = -1;
 	aswapp(&dump->root, &fs->snap);
 

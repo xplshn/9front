@@ -82,6 +82,9 @@ faultarm(Ureg *ureg, ulong fsr, uintptr addr)
 
 	read = (fsr & (1<<11)) == 0;
 	switch(fsr & 0x1F){
+	case 0x02:
+		postnote(up, 1, "sys: breakpoint", NDebug);
+		break;
 	case 0x05:	/* translation fault L1 */
 	case 0x07:	/* translation fault L2 */
 	case 0x03:	/* access flag fault L1 */
@@ -380,10 +383,7 @@ callwithureg(void (*f) (Ureg *))
 uintptr
 userpc(void)
 {
-	Ureg *ur;
-	
-	ur = up->dbgreg;
-	return ur->pc;
+	return up->dbgreg->pc;
 }
 
 uintptr
@@ -485,17 +485,17 @@ forkchild(Proc *p, Ureg *ureg)
 }
 
 uintptr
-execregs(uintptr entry, ulong ssize, ulong nargs)
+execregs(uintptr entry, int argc, char *argv[], Tos *tos)
 {
-	ulong *sp;
+	ulong *sp = (void*)argv;
 	Ureg *ureg;
 
-	sp = (ulong*)(USTKTOP - ssize);
-	*--sp = nargs;
+	*--sp = argc;
 
 	ureg = up->dbgreg;
 	ureg->sp = (uintptr) sp;
 	ureg->pc = entry;
 	ureg->r14 = 0;
-	return USTKTOP-sizeof(Tos);
+
+	return (uintptr)tos;
 }

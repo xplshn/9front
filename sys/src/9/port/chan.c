@@ -742,10 +742,17 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
 				putmhead(m);
 				nexterror();
 			}
-			m->mount = newmount(old, 0, nil);
+			f = newmount(old, 0, nil);
+			f->umh = m;
+			m->mount = f;
+			pgrpinsert(pg, f);
 			poperror();
 		}
 		*l = m;
+	}
+	for(f = nm; f != nil; f = f->next){
+		f->umh = m;
+		pgrpinsert(pg, f);
 	}
 	wlock(&m->lock);
 	um = m->mount;
@@ -764,6 +771,8 @@ cmount(Chan *new, Chan *old, int flag, char *spec)
 		m->mount = nm;
 	}
 	wunlock(&m->lock);
+	for(f = um; f != nil; f = f->next)
+		pgrpremove(pg, f);
 	wunlock(&pg->ns);
 	poperror();
 
@@ -807,19 +816,23 @@ cunmount(Chan *mnt, Chan *mounted)
 	}
 
 	wlock(&m->lock);
-	f = m->mount;
 	if(mounted == nil){
-		*l = m->hash;
+		for(f = m->mount; f != nil; f = f->next)
+			pgrpremove(pg, f);
+		f = m->mount;
 		m->mount = nil;
+		*l = m->hash;
 		wunlock(&m->lock);
 		wunlock(&pg->ns);
 		mountfree(f);
 		putmhead(m);
 		return;
 	}
-	for(p = &m->mount; f != nil; f = f->next){
+	p = &m->mount;
+	for(f = m->mount; f != nil; f = f->next){
 		if(eqchan(f->to, mounted, 1) ||
 		  (f->to->mchan != nil && eqchan(f->to->mchan, mounted, 1))){
+			pgrpremove(pg, f);
 			*p = f->next;
 			f->next = nil;
 			if(m->mount == nil){
@@ -1282,7 +1295,7 @@ namelenerror(char *aname, int len, char *err)
 Chan*
 namec(char *aname, int amode, int omode, ulong perm)
 {
-	int len, n, t, nomount, devunmount;
+	int len, n, t, nomount;
 	Chan *c;
 	Chan *volatile cnew;
 	Path *volatile path;
@@ -1302,24 +1315,6 @@ namec(char *aname, int amode, int omode, ulong perm)
 	name = aname;
 
 	/*
-	 * When unmounting, the name parameter must be accessed
-	 * using Aopen in order to get the real chan from
-	 * something like /srv/cs or /fd/0. However when sandboxing,
-	 * unmounting a sharp from a union is a valid operation even
-	 * if the device is blocked.
-	 */
-	devunmount = 0;
-	if(amode == Aunmount){
-		/*
-		 * Doing any walks down the device could leak information
-		 * about the existence of files.
-		 */
-		if(name[0] == '#' && utflen(name) == 2)
-			devunmount = 1;
-		amode = Aopen;
-	}
-
-	/*
 	 * Find the starting off point (the current slash, the root of
 	 * a device tree, or the current dot) as well as the name to
 	 * evaluate starting there.
@@ -1333,7 +1328,6 @@ namec(char *aname, int amode, int omode, ulong perm)
 	
 	case '#':
 		nomount = 1;
-		up->genbuf[0] = '\0';
 		n = 0;
 		while(*name != '\0' && (*name != '/' || n < 2)){
 			if(n >= sizeof(up->genbuf)-1)
@@ -1342,10 +1336,17 @@ namec(char *aname, int amode, int omode, ulong perm)
 		}
 		up->genbuf[n] = '\0';
 		n = chartorune(&r, up->genbuf+1)+1;
-		t = devno(r, 1);
-		if(t == -1)
+		t = devno(r);
+		if(t < 0)
 			error(Ebadsharp);
-		if(!devunmount && !devallowed(up->pgrp, r))
+		/*
+		 * When sandboxing, unmounting a sharp from a union is a valid
+		 * operation even if the device is blocked.
+		 * Doing any walks down the device could leak information
+		 * about the existence of files.
+		 */
+		if((amode != Aunmount || up->genbuf[n] || *name)
+		&& devmasked(up->pgrp, t))
 			error(Enoattach);
 
 		c = devtab[t]->attach(up->genbuf+n);
@@ -1420,6 +1421,14 @@ namec(char *aname, int amode, int omode, ulong perm)
 		error("cannot exec directory");
 
 	switch(amode){
+	case Aunmount:
+		/*
+		 * When unmounting, the channel must be opend when not a directory
+		 * in order to get the real chan from something like /srv/cs or /fd/0.
+		 */ 
+		if((c->qid.type&QTDIR) == 0)
+			goto Open;
+		/* wet floor */
 	case Abind:
 		/* no need to maintain path - cannot dotdot an Abind */
 		m = nil;
@@ -1472,6 +1481,7 @@ namec(char *aname, int amode, int omode, ulong perm)
 
 		case Aopen:
 		case Acreate:
+		case Aunmount:
 			/* only save the mount head if it's a multiple element union */
 			if(m != nil) {
 				rlock(&m->lock);

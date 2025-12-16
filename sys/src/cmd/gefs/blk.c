@@ -118,7 +118,7 @@ readblk(Blk *b, Bptr bp, int flg)
 		xh = bp.hash;
 		ck = blkhash(b);
 	}
-	if((!flg&GBnochk) && ck != xh)
+	if((flg&GBnochk) == 0 && ck != xh)
 		broke("%s: %ullx %llux != %llux", Ecorrupt, bp.addr, xh, ck);
 	bassert(b, b->magic == Magic);
 }
@@ -128,7 +128,7 @@ pickarena(uint ty, uint hint, int tries)
 {
 	uint n, r;
 
-	r = ainc(&fs->roundrobin)/2048;
+	r = aincl(&fs->roundrobin, 1)/2048;
 	if(ty == Tdat)
 		n = hint % (fs->narena - 1) + r + 1;
 	else
@@ -359,6 +359,7 @@ loadlog(Arena *a, Bptr bp)
 				dprint("\tlog@%x: sync %lld\n", i, gen);
 				if(gen >= agetv(&fs->qgen)){
 					if(a->logtl == nil){
+						b->logp = Zb;
 						b->logsz = i;
 						a->logtl = b;
 						cachedel(b->bp.addr);
@@ -883,11 +884,9 @@ Again:
 	for(i = 0; i < agetl(&fs->nworker); i++){
 		e = agetl(&fs->lepoch[i]);
 		if((e & Eactive) && e != (ge | Eactive)){
-			if(delay < 1000)
-				delay++;
-			else
+			if(delay == 300)
 				fprint(2, "stalled epoch %lx [worker %d]\n", e, i);
-			sleep(delay);
+			sleep(delay++);
 			goto Again;
 		}
 	}

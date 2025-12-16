@@ -444,10 +444,13 @@ apply(Kvp *kv, Msg *m, char *buf, int nbuf)
 static void
 setb(Blk **dst, Tree *t, Blk *b)
 {
-	if(*dst != nil)
+	if(*dst != nil){
 		freeblk(t, *dst);
+		dropblk(*dst);
+	}
 	if(b->nval == 0){
 		freeblk(t, b);
+		dropblk(b);
 		*dst = nil;
 	}else{
 		enqueue(b);
@@ -677,7 +680,7 @@ updatepiv(Tree *t, Path *up, Path *p, Path *pp)
  * grow the total height of the tree by more than 1.
  */
 static void
-splitleaf(Tree *t, Path *up, Path *p, Kvp *mid)
+splitleaf(Tree *t, Path *up, Path *p)
 {
 	char buf[Msgmax];
 	Blk *b, *d, *l, *r;
@@ -724,7 +727,6 @@ splitleaf(Tree *t, Path *up, Path *p, Kvp *mid)
 		if((i == b->nval-2) || (i >= 2 && copied >= halfsz)){
 			d = r;
 			spc = Leafspc - (halfsz + Msgmax);
-			getval(b, i, mid);
 		}
 		getval(b, i, &v);
  		c = pullmsg(up, j, &v, &m, &full, spc);
@@ -795,11 +797,11 @@ splitleaf(Tree *t, Path *up, Path *p, Kvp *mid)
  * than one.
  */
 static void
-splitpiv(Tree *t, Path *, Path *p, Path *pp, Kvp *mid)
+splitpiv(Tree *t, Path *, Path *p, Path *pp)
 {
 	int i, copied, halfsz;
 	Blk *b, *d, *l, *r;
-	Kvp tk;
+	Kvp tk, mid;
 	Msg m;
 
 	/*
@@ -823,16 +825,11 @@ splitpiv(Tree *t, Path *, Path *p, Path *pp, Kvp *mid)
 	bassert(b, b->nval >= 4);
 	for(i = 0; i < b->nval; i++){
 		/*
-		 * We're trying to balance size,
-		 * but we need at least 2 nodes
-		 * in each half of the split if
-		 * we want a valid tree.
+		 * Balance size, but ensure we have at least 2 nodes
+		 * in each half of the split so we have a valid tree.
 		 */
-		if(d == l)
-		if((i == b->nval-2) || (i >= 2 && copied >= halfsz)){
+		if(d == l && (i == b->nval-2 || (i >= 2 && copied >= halfsz)))
 			d = r;
-			getval(b, i, mid);
-		}
 		if(i == p->idx){
 			copyup(d, pp, &copied);
 			continue;
@@ -842,13 +839,14 @@ splitpiv(Tree *t, Path *, Path *p, Path *pp, Kvp *mid)
 		copied += valsz(&tk);
 	}
 	d = l;
+	getval(r, 0, &mid);
 	for(i = 0; i < b->nbuf; i++){
 		if(i == p->lo)
 			i += pp->npull;
 		if(i == b->nbuf)
 			break;
 		getmsg(b, i, &m);
-		if(d == l && keycmp(&m, mid) >= 0)
+		if(d == l && keycmp(&m, &mid) >= 0)
 			d = r;
 		setmsg(d, &m);
 	}
@@ -1079,7 +1077,6 @@ flush(Tree *t, Path *path, int npath)
 {
 
 	Path *up, *p, *pp, *rp;
-	Kvp mid;
 
 	/*
 	 * The path must contain at minimum two elements:
@@ -1097,7 +1094,7 @@ flush(Tree *t, Path *path, int npath)
 			updateleaf(t, p-1, p);
 			rp = p;
 		}else{
-			splitleaf(t, up, p, &mid);
+			splitleaf(t, up, p);
 		}
 		p->midx = -1;
 		pp = p;
@@ -1117,13 +1114,14 @@ flush(Tree *t, Path *path, int npath)
 			trybalance(t, p, pp, p->idx);
 			/* If we merged the root node, break out. */
 			if(up == path && pp != nil && pp->op == POmerge && p->b->nval == 2){
+				pp->npull = p->npull;
 				rp = pp;
 				goto Out;
 			}
 			updatepiv(t, up, p, pp);
 			rp = p;
 		}else{
-			splitpiv(t, up, p, pp, &mid);
+			splitpiv(t, up, p, pp);
 		}
 		pp = p;
 		up--;
